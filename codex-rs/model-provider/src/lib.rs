@@ -1,0 +1,51 @@
+mod auth;
+mod bearer_auth_provider;
+mod capabilities;
+mod combined_auth;
+pub mod credential;
+mod models_endpoint;
+mod models_identity;
+pub mod provider;
+pub mod shared_state;
+pub mod test_support;
+mod workspace_routing;
+pub use workspace_routing::ACCOUNT_ROUTING_HEADER;
+pub use workspace_routing::ResolvedResponsesProvider;
+pub use workspace_routing::ResponsesConnectionKey;
+pub use workspace_routing::WorkspaceRoutingContext;
+
+pub use auth::AgentIdentitySessionFallback;
+pub use auth::unauthenticated_auth_provider;
+pub use auth::ProviderAuthScope;
+pub use auth::ResolvedProviderAuth;
+pub use auth::auth_manager_for_provider;
+pub use auth::auth_provider_from_auth;
+pub use auth::auth_provider_from_auth_manager;
+pub use auth::auth_provider_from_credential;
+pub use auth::resolve_provider_auth;
+pub use bearer_auth_provider::BearerAuthProvider;
+pub use codex_api::SharedAuthProvider;
+pub use bearer_auth_provider::BearerAuthProvider as CoreAuthProvider;
+pub use capabilities::ProviderCapabilities;
+pub use credential::AccountIdentity;
+pub use credential::BackendKind;
+pub use credential::ProviderCredential;
+pub use codex_model_provider_info::AMAZON_BEDROCK_PROVIDER_ID;
+pub use codex_model_provider_info::AMAZON_BEDROCK_RUNTIME_PROVIDER_ID;
+pub use codex_model_provider_info::CHATGPT_CODEX_BASE_URL;
+pub use codex_model_provider_info::RemoteCompactionSupport;
+pub use codex_protocol::account::ProviderAccount;
+pub use provider::ModelProvider;
+pub use provider::ModelProviderFuture;
+pub use provider::ProviderAccountError;
+pub use provider::ProviderAccountResult;
+pub use provider::ProviderAccountState;
+pub use provider::ProviderUnauthorizedRecovery;
+pub use provider::SharedModelProvider;
+pub use provider::ProviderFactory;
+pub use provider::create_model_provider;
+pub use provider::register_provider_factory;
+
+#[cfg(test)]
+#[path = "workspace_routing_tests.rs"]
+mod workspace_routing_tests;
