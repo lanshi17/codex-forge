@@ -14,10 +14,10 @@ async fn list_discoverable_plugins(
 ) -> anyhow::Result<Vec<DiscoverablePluginInfo>> {
     let plugins_manager =
         plugins_manager_for_config(config, auth_manager_from_optional_auth(/*auth*/ None));
-    super::list_tool_suggest_discoverable_plugins_for_credential(
+    super::list_tool_suggest_discoverable_plugins(
         config,
         &plugins_manager,
-        /*credential*/ None,
+        /*auth*/ None,
         loaded_plugin_app_connector_ids,
     )
     .await

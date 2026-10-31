@@ -11,6 +11,7 @@ pub use codex_connectors::AppMetadata;
 use codex_connectors::ConnectorDirectoryCacheContext;
 use codex_connectors::ConnectorDirectoryCacheKey;
 use codex_connectors::apps_config_from_layer_stack;
+use codex_connectors::connector_runtime_context_key;
 use codex_exec_server::EnvironmentManager;
 use codex_exec_server::ExecServerRuntimeOptions;
 use codex_tools::DiscoverableTool;
@@ -20,7 +21,7 @@ use tracing::warn;
 
 use crate::config::Config;
 use crate::mcp::McpManager;
-use crate::plugins::list_tool_suggest_discoverable_plugins_for_credential;
+use crate::plugins::list_tool_suggest_discoverable_plugins;
 use crate::plugins::plugins_manager_for_config;
 use crate::session::INITIAL_SUBMIT_ID;
 use codex_config::types::ApprovalsReviewer;
@@ -28,6 +29,7 @@ use codex_config::types::ToolSuggestDiscoverableType;
 use codex_core_plugins::PluginsManager;
 use codex_features::Feature;
 use codex_login::AuthManager;
+use codex_login::CodexAuth;
 use codex_mcp::CODEX_APPS_MCP_SERVER_NAME;
 use codex_mcp::MCP_TOOL_CODEX_APPS_META_KEY;
 use codex_mcp::McpRuntime;
@@ -36,10 +38,8 @@ use codex_mcp::McpRuntimeInput;
 use codex_mcp::McpStartupPolicy;
 use codex_mcp::ToolInfo;
 use codex_mcp::ToolPluginContext;
-use codex_mcp::effective_mcp_servers_for_credential;
-use codex_mcp::host_owned_codex_apps_enabled_for_credential;
+use codex_mcp::effective_mcp_servers;
 use codex_mcp::tool_plugin_context;
-use codex_model_provider::ProviderCredential;
 use codex_protocol::mcp::ClientMcpExtensions;
 
 const CONNECTORS_READY_TIMEOUT_ON_EMPTY_TOOLS: Duration = Duration::from_secs(30);
@@ -81,30 +81,27 @@ pub async fn list_accessible_connectors_from_mcp_tools(
 }
 
 #[instrument(level = "trace", skip_all)]
-pub(crate) async fn list_tool_suggest_discoverable_tools_for_credential(
+pub(crate) async fn list_tool_suggest_discoverable_tools_with_auth(
     config: &Config,
     plugins_manager: &PluginsManager,
-    credential: Option<&ProviderCredential>,
+    auth: Option<&CodexAuth>,
     accessible_connectors: &[AppInfo],
     loaded_plugin_app_connector_ids: &[String],
 ) -> anyhow::Result<Vec<DiscoverableTool>> {
     let connector_ids = tool_suggest_connector_ids(config, loaded_plugin_app_connector_ids);
-    let directory_connectors = codex_connectors::merge::merge_plugin_connectors(
-        cached_directory_connectors_for_tool_suggest_for_credential(config, credential).await,
-        connector_ids.iter().cloned(),
-    );
     let discoverable_connectors =
         codex_connectors::filter::filter_tool_suggest_discoverable_connectors(
-            directory_connectors,
+            cached_directory_connectors_for_tool_suggest_with_auth(config, auth),
             accessible_connectors,
-            &connector_ids,
+            connector_ids,
         )
+        .await
         .into_iter()
         .map(DiscoverableTool::from);
-    let discoverable_plugins = list_tool_suggest_discoverable_plugins_for_credential(
+    let discoverable_plugins = list_tool_suggest_discoverable_plugins(
         config,
         plugins_manager,
-        credential,
+        auth,
         loaded_plugin_app_connector_ids,
     )
     .await?
@@ -118,39 +115,31 @@ pub(crate) async fn list_tool_suggest_discoverable_tools_for_credential(
 pub async fn list_cached_accessible_connectors_from_mcp_tools(
     config: &Config,
 ) -> Option<Vec<AppInfo>> {
-    let credential = credential_for_threadless_connectors(config).await?;
-    if !config
-        .features
-        .apps_enabled_for_auth(credential.as_ref().is_some_and(|credential| credential.uses_backend_routes))
-    {
-        return Some(Vec::new());
-    }
-    let cache_key = accessible_connectors_cache_key(config, credential.as_ref());
-    read_cached_accessible_connectors(&cache_key)
-}
-
-async fn credential_for_threadless_connectors(config: &Config) -> Option<Option<ProviderCredential>> {
     let auth_manager =
         AuthManager::shared_from_config(config, /*enable_codex_api_key_env*/ false)
             .await
             .ok()?;
-    let provider = codex_model_provider::create_model_provider(
-        config.model_provider.clone(),
-        Some(Arc::clone(&auth_manager)),
-    );
-    Some(provider.auth().await)
+    let auth = auth_manager.auth().await;
+    if !config
+        .features
+        .apps_enabled_for_auth(auth.as_ref().is_some_and(CodexAuth::uses_codex_backend))
+    {
+        return Some(Vec::new());
+    }
+    let cache_key = accessible_connectors_cache_key(config, auth.as_ref());
+    read_cached_accessible_connectors(&cache_key)
 }
 
 pub(crate) fn refresh_accessible_connectors_cache_from_mcp_tools(
     config: &Config,
-    credential: Option<&ProviderCredential>,
+    auth: Option<&CodexAuth>,
     mcp_tools: &[ToolInfo],
 ) {
     if !config.features.enabled(Feature::Apps) {
         return;
     }
 
-    let cache_key = accessible_connectors_cache_key(config, credential);
+    let cache_key = accessible_connectors_cache_key(config, auth);
     let accessible_connectors = accessible_connectors_for_app_list_from_mcp_tools(mcp_tools);
     write_cached_accessible_connectors(cache_key, &accessible_connectors);
 }
@@ -218,68 +207,19 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_mcp_manager(
     environment_manager: Arc<EnvironmentManager>,
     mcp_manager: Arc<McpManager>,
 ) -> anyhow::Result<AccessibleConnectorsStatus> {
-    list_accessible_connectors_from_mcp_tools_with_credential(
-        config,
-        force_refetch,
-        environment_manager,
-        mcp_manager,
-        /*credential*/ None,
-    )
-    .await
-}
-
-/// Threadless connector discovery with an injected credential snapshot.
-///
-/// Callers that already hold `provider.auth()` pass it through; threadless
-/// entry points without a session pass `None` and fall back to an empty
-/// credential so discovery stays read-only and never constructs auth state.
-pub async fn list_accessible_connectors_from_mcp_tools_with_credential(
-    config: &Config,
-    force_refetch: bool,
-    environment_manager: Arc<EnvironmentManager>,
-    mcp_manager: Arc<McpManager>,
-    credential: Option<ProviderCredential>,
-) -> anyhow::Result<AccessibleConnectorsStatus> {
-    let owned_auth_manager;
-    let owned_credential: Option<ProviderCredential>;
-    let credential: Option<&ProviderCredential> = match credential {
-        Some(credential) => {
-            owned_credential = Some(credential);
-            owned_credential.as_ref()
-        }
-        None => match credential_for_threadless_connectors(config).await {
-            Some(credential) => {
-                owned_credential = credential;
-                owned_credential.as_ref()
-            }
-            None => {
-                return Ok(AccessibleConnectorsStatus {
-                    connectors: Vec::new(),
-                    codex_apps_ready: true,
-                });
-            }
-        },
-    };
-    let auth_manager = if host_owned_codex_apps_enabled_for_credential(
-        &mcp_manager.runtime_config(config).await,
-        credential,
-    ) {
-        let manager = AuthManager::shared_from_config(config, /*enable_codex_api_key_env*/ false).await?;
-        owned_auth_manager = manager;
-        Some(Arc::clone(&owned_auth_manager))
-    } else {
-        None
-    };
+    let auth_manager =
+        AuthManager::shared_from_config(config, /*enable_codex_api_key_env*/ false).await?;
+    let auth = auth_manager.auth().await;
     if !config
         .features
-        .apps_enabled_for_auth(credential.is_some_and(|credential| credential.uses_backend_routes))
+        .apps_enabled_for_auth(auth.as_ref().is_some_and(CodexAuth::uses_codex_backend))
     {
         return Ok(AccessibleConnectorsStatus {
             connectors: Vec::new(),
             codex_apps_ready: true,
         });
     }
-    let cache_key = accessible_connectors_cache_key(config, credential);
+    let cache_key = accessible_connectors_cache_key(config, auth.as_ref());
     let mcp_config = mcp_manager.runtime_config(config).await;
     let tool_plugin_context = tool_plugin_context(&mcp_config);
     if !force_refetch && let Some(cached_connectors) = read_cached_accessible_connectors(&cache_key)
@@ -291,7 +231,7 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_credential(
         });
     }
 
-    let mut mcp_servers = effective_mcp_servers_for_credential(&mcp_config, credential);
+    let mut mcp_servers = effective_mcp_servers(&mcp_config, auth.as_ref());
     mcp_servers.retain(|name, _| name == CODEX_APPS_MCP_SERVER_NAME);
     let mcp_config = Arc::new(mcp_config.for_threadless_operations(&mcp_servers));
     if mcp_servers.is_empty() {
@@ -305,8 +245,11 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_credential(
         McpRuntimeContext::new(Arc::clone(&environment_manager), config.cwd.to_path_buf());
 
     let cancel_token = CancellationToken::new();
-    let codex_apps_auth_manager = auth_manager;
+    let codex_apps_auth_manager =
+        codex_mcp::host_owned_codex_apps_enabled(&mcp_config, auth.as_ref())
+            .then(|| Arc::clone(&auth_manager));
     let mcp_runtime = McpRuntime::new(McpRuntimeInput {
+        network_policy_metadata: None,
         startup_policy: McpStartupPolicy::Eager,
         config: Arc::clone(&mcp_config),
         plugins_available: false,
@@ -320,10 +263,9 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_credential(
         runtime_context,
         codex_apps_tools_cache: mcp_manager.codex_apps_tools_cache(),
         tool_catalog_cache: mcp_manager.tool_catalog_cache(),
-        codex_apps_tools_cache_key:
-            codex_mcp::codex_apps_tools_cache_key_for_credential(credential),
+        codex_apps_tools_cache_key: connector_runtime_context_key(auth.as_ref()),
         client_mcp_extensions: ClientMcpExtensions::default(),
-        auth: None,
+        auth: auth.clone(),
         auth_manager: codex_apps_auth_manager,
         elicitation_reviewer: None,
         elicitation_lifecycle: None,
@@ -400,13 +342,13 @@ pub async fn list_accessible_connectors_from_mcp_tools_with_credential(
 
 fn accessible_connectors_cache_key(
     config: &Config,
-    credential: Option<&ProviderCredential>,
+    auth: Option<&CodexAuth>,
 ) -> AccessibleConnectorsCacheKey {
-    let account_id = credential.and_then(|credential| credential.account_id().map(str::to_string));
-    let chatgpt_user_id = credential.and_then(|credential| credential.chatgpt_user_id().map(str::to_string));
-    let is_workspace_account = credential.is_some_and(|credential| credential.is_workspace_account());
+    let account_id = auth.and_then(CodexAuth::get_account_id);
+    let chatgpt_user_id = auth.and_then(CodexAuth::get_chatgpt_user_id);
+    let is_workspace_account = auth.is_some_and(CodexAuth::is_workspace_account);
     AccessibleConnectorsCacheKey {
-        chatgpt_base_url: config.chatgpt_base_url.clone().unwrap_or_default(),
+        chatgpt_base_url: config.chatgpt_base_url.clone(),
         account_id,
         chatgpt_user_id,
         is_workspace_account,
@@ -475,41 +417,41 @@ fn tool_suggest_connector_ids(
 }
 
 #[instrument(level = "trace", skip_all)]
-async fn cached_directory_connectors_for_tool_suggest_for_credential(
+async fn cached_directory_connectors_for_tool_suggest_with_auth(
     config: &Config,
-    credential: Option<&ProviderCredential>,
-) -> Vec<AppInfo> {
+    auth: Option<&CodexAuth>,
+) -> Arc<[AppInfo]> {
     if !config.features.enabled(Feature::Apps) {
-        return Vec::new();
+        return Arc::default();
     }
 
-    let owned_credential: Option<ProviderCredential>;
-    let credential: Option<&ProviderCredential> = match credential {
-        Some(credential) => Some(credential),
-        None => {
-            let Some(snapshot) = credential_for_threadless_connectors(config).await.flatten()
-            else {
-                return Vec::new();
-            };
-            owned_credential = Some(snapshot);
-            owned_credential.as_ref()
-        }
+    let loaded_auth;
+    let auth = if let Some(auth) = auth {
+        Some(auth)
+    } else {
+        let Ok(auth_manager) =
+            AuthManager::shared_from_config(config, /*enable_codex_api_key_env*/ false).await
+        else {
+            return Arc::default();
+        };
+        loaded_auth = auth_manager.auth().await;
+        loaded_auth.as_ref()
     };
-    let Some(credential) = credential.filter(|credential| credential.uses_backend_routes) else {
-        return Vec::new();
+    let Some(auth) = auth.filter(|auth| auth.uses_codex_backend()) else {
+        return Arc::default();
     };
 
-    let account_id = match credential.account_id() {
-        Some(account_id) if !account_id.is_empty() => account_id.to_string(),
-        _ => return Vec::new(),
+    let account_id = match auth.get_account_id() {
+        Some(account_id) if !account_id.is_empty() => account_id,
+        _ => return Arc::default(),
     };
-    let is_workspace_account = credential.is_workspace_account();
+    let is_workspace_account = auth.is_workspace_account();
     let cache_context = ConnectorDirectoryCacheContext::new(
         config.codex_home.to_path_buf(),
         ConnectorDirectoryCacheKey::new(
-            config.chatgpt_base_url.clone().unwrap_or_default(),
+            config.chatgpt_base_url.clone(),
             Some(account_id),
-            credential.chatgpt_user_id().map(str::to_string),
+            auth.get_chatgpt_user_id(),
             is_workspace_account,
         ),
     );

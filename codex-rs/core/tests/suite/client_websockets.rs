@@ -17,7 +17,6 @@ use codex_http_client::OutboundProxyPolicy;
 use codex_login::AuthManager;
 use codex_login::CodexAuth;
 use codex_login::auth::AgentIdentityAuthPolicy;
-use codex_model_provider::create_model_provider;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_model_provider_info::WireApi;
 use codex_otel::MetricsClient;
@@ -77,6 +76,9 @@ use std::time::Duration;
 use tempfile::TempDir;
 use tracing::Instrument;
 use tracing_test::traced_test;
+
+#[path = "client_websockets_runtime_auth.rs"]
+mod runtime_auth_tests;
 
 const MODEL: &str = "gpt-5.4";
 const OPENAI_BETA_HEADER: &str = "OpenAI-Beta";
@@ -335,7 +337,7 @@ async fn responses_websocket_omits_routing_hint_for_provider_with_own_credential
     .await;
 
     let mut provider = websocket_provider(&server);
-    provider.name = ModelProviderInfo::create_openai_compatible_provider(/*base_url*/ None).name;
+    provider.name = ModelProviderInfo::create_openai_provider(/*base_url*/ None).name;
     provider.experimental_bearer_token = Some("provider-specific-token".into());
     let harness = websocket_harness_with_provider_options_and_auth(
         provider,
@@ -732,7 +734,7 @@ async fn responses_websocket_request_prewarm_reuses_connection() {
     .await;
 
     let mut provider = websocket_provider(&server);
-    provider.name = ModelProviderInfo::create_openai_compatible_provider(/*base_url*/ None).name;
+    provider.name = ModelProviderInfo::create_openai_provider(/*base_url*/ None).name;
     let harness = websocket_harness_with_provider_options(
         provider,
         /*runtime_metrics_enabled*/ true,
@@ -1380,7 +1382,7 @@ async fn responses_websocket_v2_incremental_requests_are_reused_across_turns() {
 
     // use OpenAI provider to check metadata logic
     let mut provider = websocket_provider(&server);
-    provider.name = ModelProviderInfo::create_openai_compatible_provider(/*base_url*/ None).name;
+    provider.name = ModelProviderInfo::create_openai_provider(/*base_url*/ None).name;
     let harness = websocket_harness_with_provider_options(
         provider,
         /*runtime_metrics_enabled*/ false,
@@ -2734,6 +2736,9 @@ fn websocket_provider_with_connect_timeout(
         supports_websockets: true,
         supports_standalone_web_search: false,
         capabilities: None,
+        project_id: None,
+        location: None,
+        credential_file: None,
         include_internal_metadata: false,
     }
 }
@@ -2743,7 +2748,7 @@ async fn websocket_harness(server: &WebSocketTestServer) -> WebsocketTestHarness
 }
 
 async fn websocket_harness_for_codex_backend(server: &WebSocketTestServer) -> WebsocketTestHarness {
-    let provider = ModelProviderInfo::create_openai_compatible_provider(Some(format!("{}/v1", server.uri())));
+    let provider = ModelProviderInfo::create_openai_provider(Some(format!("{}/v1", server.uri())));
     websocket_harness_with_provider_options_and_auth(
         provider,
         /*runtime_metrics_enabled*/ false,
@@ -2862,10 +2867,22 @@ async fn websocket_harness_with_provider_options_and_auth(
     .with_metrics(metrics);
     let effort = None;
     let summary = ReasoningSummary::Auto;
+    let _gateway = provider.gateway_oauth.as_ref().map(|_| {
+        codex_model_provider::test_support::seed_gateway_auth(
+            &provider,
+            &auth_manager,
+            serde_json::json!({
+                "access_token": "gateway-token",
+                "refresh_token": "refresh-token",
+                "expires_at": i64::MAX,
+            }),
+        )
+    });
     let client = ModelClient::new(
-        create_model_provider(provider.clone(), client_auth_manager),
+        client_auth_manager,
         AgentIdentityAuthPolicy::JwtOnly,
         thread_id,
+        provider.clone(),
         SessionSource::Exec,
         "test_originator".to_string(),
         config.model_verbosity,

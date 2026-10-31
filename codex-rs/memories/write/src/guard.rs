@@ -6,27 +6,21 @@ use codex_protocol::protocol::RateLimitWindow;
 use tracing::info;
 use tracing::warn;
 
-pub(crate) async fn rate_limits_ok(auth_manager: &std::sync::Arc<AuthManager>, config: &Config) -> bool {
+pub(crate) async fn rate_limits_ok(auth_manager: &AuthManager, config: &Config) -> bool {
     rate_limits_check(auth_manager, config)
         .await
         .unwrap_or(true)
 }
 
-async fn rate_limits_check(auth_manager: &std::sync::Arc<AuthManager>, config: &Config) -> Option<bool> {
-    let credential = codex_model_provider::create_model_provider(
-        config.model_provider.clone(),
-        Some(std::sync::Arc::clone(auth_manager)),
-    )
-    .auth()
-    .await?;
-    if !credential.uses_backend_routes {
+async fn rate_limits_check(auth_manager: &AuthManager, config: &Config) -> Option<bool> {
+    let auth = auth_manager.auth().await?;
+    if !auth.uses_codex_backend() {
         return None;
     }
-    let backend_base_url = config.chatgpt_base_url.clone()?;
 
-    let client = BackendClient::from_credential(
-        backend_base_url,
-        &credential,
+    let client = BackendClient::from_auth(
+        config.chatgpt_base_url.clone(),
+        &auth,
         config.http_client_factory(),
     );
 

@@ -740,7 +740,7 @@ async fn direct_metadata_limit_respects_provider_support(
     let responses = mount_sse_sequence(&server, events).await;
     let mock_url = server.uri();
     let configure_metadata = move |config: &mut codex_core::config::Config| {
-        assert_eq!(config.chatgpt_base_url.as_deref(), Some(mock_url.as_str()));
+        assert_eq!(config.chatgpt_base_url, mock_url);
         assert_eq!(
             config.model_provider.base_url.as_deref(),
             Some(format!("{mock_url}/v1").as_str())

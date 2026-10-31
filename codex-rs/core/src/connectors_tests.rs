@@ -10,7 +10,6 @@ use codex_connectors::metadata::sanitize_name;
 use codex_features::Feature;
 use codex_login::AuthManager;
 use codex_login::CodexAuth;
-use codex_model_provider::ProviderCredential;
 use codex_mcp::CODEX_APPS_MCP_SERVER_NAME;
 use codex_mcp::ToolInfo;
 use pretty_assertions::assert_eq;
@@ -589,10 +588,10 @@ discoverables = [
     let plugins_manager =
         plugins_manager_for_config(&config, AuthManager::from_auth_for_testing(auth.clone()));
 
-    let discoverable_tools = list_tool_suggest_discoverable_tools_for_credential(
+    let discoverable_tools = list_tool_suggest_discoverable_tools_with_auth(
         &config,
         &plugins_manager,
-        Some(&ProviderCredential::from(&auth)),
+        Some(&auth),
         &[],
         &[],
     )
@@ -628,10 +627,10 @@ apps = true
     let plugins_manager =
         plugins_manager_for_config(&config, AuthManager::from_auth_for_testing(auth.clone()));
 
-    let discoverable_tools = list_tool_suggest_discoverable_tools_for_credential(
+    let discoverable_tools = list_tool_suggest_discoverable_tools_with_auth(
         &config,
         &plugins_manager,
-        Some(&ProviderCredential::from(&auth)),
+        Some(&auth),
         &[],
         &loaded_plugin_app_connector_ids,
     )

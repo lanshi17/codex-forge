@@ -7,10 +7,8 @@ use codex_extension_api::McpServerContributor;
 use codex_mcp::CODEX_APPS_MCP_SERVER_NAME;
 use codex_mcp::hosted_plugin_runtime_mcp_server_config;
 
+mod catalog_observability;
 mod cloud_plugin;
-#[cfg(test)]
-#[path = "event_stream_tests.rs"]
-mod event_stream_tests;
 mod plugin;
 mod plugin_contributor;
 mod plugin_contributor_state;
@@ -29,10 +27,6 @@ pub use plugin_providers::PluginProviders;
 pub use stream_manager::McpEventStreamManager;
 pub use stream_manager::McpEventStreamUpdate;
 
-#[cfg(test)]
-#[path = "stream_manager_tests.rs"]
-mod stream_manager_tests;
-
 struct HostedPluginRuntimeExtension;
 
 impl McpServerContributor<Config> for HostedPluginRuntimeExtension {
@@ -50,13 +44,10 @@ impl McpServerContributor<Config> for HostedPluginRuntimeExtension {
             if !config.features.enabled(codex_features::Feature::Apps) {
                 return vec![McpServerContribution::Remove { name }];
             }
-            let Some(backend_base_url) = config.chatgpt_base_url.as_deref() else {
-                return vec![McpServerContribution::Remove { name }];
-            };
 
             vec![McpServerContribution::HostedApps {
                 config: Box::new(hosted_plugin_runtime_mcp_server_config(
-                    backend_base_url,
+                    &config.chatgpt_base_url,
                     config.apps_mcp_product_sku.as_deref(),
                     context.originator(),
                 )),

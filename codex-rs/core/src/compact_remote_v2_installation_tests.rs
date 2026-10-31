@@ -28,7 +28,7 @@ async fn prepared_prefix_rejection_respects_caller_intent(
 ) {
     let server = responses::start_mock_server().await;
     let mut provider =
-        codex_model_provider_info::built_in_model_providers(/*openai_base_url*/ None)["default"]
+        codex_model_provider_info::built_in_model_providers(/*openai_base_url*/ None)["openai"]
             .clone();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;
@@ -40,7 +40,7 @@ async fn prepared_prefix_rejection_respects_caller_intent(
             move |config| {
                 config.model = Some("gpt-5.2".to_string());
                 config.model_provider = provider;
-                config.chatgpt_base_url = Some(server_uri);
+                config.chatgpt_base_url = server_uri;
                 let _ = config.features.disable(Feature::TokenBudget);
             },
         )

@@ -25,6 +25,7 @@ use codex_api::SharedAuthProvider;
 use codex_api::TransportError;
 use codex_api::build_session_headers;
 use codex_http_client::ClientRouteClass;
+use codex_login::CodexAuth;
 use codex_login::default_client::ClientRedirectPolicy;
 use codex_login::default_client::add_originator_header;
 use codex_login::default_client::create_client_for_route_async;
@@ -437,8 +438,8 @@ impl ConnectionPool {
             .auth()
             .await
             .as_ref()
-            .is_some_and(|c: &codex_model_provider::ProviderCredential| c.uses_backend_routes)
-            && provider.supports_codex_backend_routes()
+            .is_some_and(CodexAuth::uses_codex_backend)
+            && provider.is_openai()
             && provider.requires_openai_auth
             && provider.env_key.is_none()
             && provider.experimental_bearer_token.is_none()

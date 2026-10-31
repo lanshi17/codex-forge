@@ -23,7 +23,7 @@ use std::collections::HashSet;
 
 pub(super) struct McpDesiredState {
     pub(super) config: Arc<Config>,
-    pub(super) credential: Option<codex_model_provider::ProviderCredential>,
+    pub(super) auth: Option<CodexAuth>,
     pub(super) submit_id: String,
     pub(super) originator: String,
     pub(super) session_source: SessionSource,
@@ -70,7 +70,7 @@ impl Session {
 
     pub(super) async fn latest_mcp_desired_state(
         &self,
-        credential: Option<codex_model_provider::ProviderCredential>,
+        auth: Option<CodexAuth>,
         environments: TurnEnvironmentSnapshot,
     ) -> McpDesiredState {
         let (session_configuration, disabled_plugin_ids) = {
@@ -86,7 +86,7 @@ impl Session {
 
         McpDesiredState {
             config: Arc::new(config),
-            credential,
+            auth,
             submit_id: self.next_internal_sub_id(),
             originator: session_configuration.originator,
             session_source: session_configuration.session_source,
@@ -99,7 +99,7 @@ impl Session {
     pub(super) async fn install_initial_mcp_runtime(
         self: &Arc<Self>,
         session_configuration: &SessionConfiguration,
-        credential: Option<codex_model_provider::ProviderCredential>,
+        auth: Option<CodexAuth>,
         mcp_projection: McpRuntimeProjection,
         resolved_environments: &TurnEnvironmentSnapshot,
     ) -> anyhow::Result<()> {
@@ -110,7 +110,7 @@ impl Session {
         let local_process_cwd = config.cwd.to_path_buf();
         let desired = McpDesiredState {
             config: Arc::new(config),
-            credential,
+            auth,
             submit_id: INITIAL_SUBMIT_ID.to_owned(),
             originator: session_configuration.originator.clone(),
             session_source: session_configuration.session_source.clone(),
@@ -141,7 +141,13 @@ impl Session {
         mut projection: McpRuntimeProjection,
     ) -> BoxFuture<'a, McpRuntimeProjection> {
         Box::pin(async move {
-            if self.isolation == codex_extension_api::SessionIsolation::Isolated {
+            if self.isolation == codex_extension_api::SessionIsolation::Isolated
+                || self
+                    .services
+                    .mcp_thread_init
+                    .get::<crate::mcp::McpServersDisabled>()
+                    .is_some()
+            {
                 return projection;
             }
 
@@ -299,7 +305,7 @@ impl Session {
         ready_selected_capability_roots: &[SelectedCapabilityRoot],
         elicitation_reviewer: Option<ElicitationReviewerHandle>,
     ) -> McpRuntimeInput {
-        let credential = desired.credential.clone();
+        let auth = desired.auth.clone();
         let McpRuntimeProjection {
             mut config,
             plugins_available,
@@ -341,8 +347,7 @@ impl Session {
                     && desired.config.effective_local_windows_sandbox_type()
                         == SandboxType::WindowsMxc,
             );
-        let mcp_servers =
-            codex_mcp::effective_mcp_servers_for_credential(&config, credential.as_ref());
+        let mcp_servers = effective_mcp_servers(&config, auth.as_ref());
         config.set_server_permission_profiles(
             &mcp_servers,
             desired.environments.turn_environments().map(|environment| {
@@ -353,15 +358,10 @@ impl Session {
             }),
         );
         let mcp_config = Arc::new(config);
-        let runtime_context = McpRuntimeContext::new(
-            self.services.turn_environments.environment_manager(),
-            desired.local_process_cwd.clone(),
-        )
-        .with_selected_environments(
-            desired.environments.all_selections().into(),
-            desired.environments.ready_environment_handles(),
-        );
+        let runtime_context =
+            self.mcp_runtime_context(&desired.environments, &desired.local_process_cwd);
         McpRuntimeInput {
+            network_policy_metadata: None,
             startup_policy: if matches!(desired.session_source, SessionSource::SubAgent(_)) {
                 McpStartupPolicy::LazyWhenCached
             } else {
@@ -377,11 +377,9 @@ impl Session {
             runtime_context,
             codex_apps_tools_cache: self.services.mcp_manager.codex_apps_tools_cache(),
             tool_catalog_cache: self.services.mcp_manager.tool_catalog_cache(),
-            codex_apps_tools_cache_key: codex_mcp::codex_apps_tools_cache_key_for_credential(
-                credential.as_ref(),
-            ),
+            codex_apps_tools_cache_key: connector_runtime_context_key(auth.as_ref()),
             client_mcp_extensions: self.services.client_mcp_extensions.for_mcp_servers(),
-            auth: None,
+            auth,
             auth_manager: Some(Arc::clone(&self.services.auth_manager)),
             elicitation_reviewer,
             elicitation_lifecycle: Some(self.mcp_elicitation_lifecycle()),

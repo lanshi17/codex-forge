@@ -52,6 +52,8 @@ runtime_archive(
     srcs = [
         "//codex-rs/app-server:release_files",
         "//codex-rs/cli:release_files",
+        "//codex-rs/code-mode-host:release_files",
+        "//codex-rs/exec-server-cli:release_files",
     ] + select({
         "@platforms//os:linux": ["//codex-rs/bwrap:release_files"],
         "@platforms//os:windows": [
@@ -68,6 +70,8 @@ runtime_archive(
     name = "runtime_package_primary",
     srcs = [
         "//codex-rs/cli:release_files",
+        "//codex-rs/code-mode-host:release_files",
+        "//codex-rs/exec-server-cli:release_files",
         "//codex-rs/responses-api-proxy:release_files",
     ] + select({
         "@platforms//os:linux": ["//codex-rs/bwrap:release_files"],
@@ -81,6 +85,8 @@ runtime_archive(
     name = "runtime_package_app-server",
     srcs = [
         "//codex-rs/app-server:release_files",
+        "//codex-rs/code-mode-host:release_files",
+        "//codex-rs/exec-server-cli:release_files",
     ] + select({
         "@platforms//os:linux": ["//codex-rs/bwrap:release_files"],
         "//conditions:default": [],
@@ -94,6 +100,7 @@ runtime_archive(
     srcs = [
         "//codex-rs/windows-sandbox-rs:command-runner-release_files",
         "//codex-rs/windows-sandbox-rs:sandbox-setup-release_files",
+        "//codex-rs/windows-sandbox-service:release_files",
     ],
     tags = ["manual"],
     target_compatible_with = ["@platforms//os:windows"],

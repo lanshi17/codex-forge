@@ -16,7 +16,7 @@ async fn cancelled_turn_skips_launch_but_preserves_existing_work(trigger: Compac
     let phase = CompactionPhase::MidTurn;
     let server = responses::start_mock_server().await;
     let mut provider =
-        codex_model_provider_info::built_in_model_providers(/*openai_base_url*/ None)["default"]
+        codex_model_provider_info::built_in_model_providers(/*openai_base_url*/ None)["openai"]
             .clone();
     provider.base_url = Some(format!("{}/v1", server.uri()));
     provider.supports_websockets = false;
@@ -30,7 +30,7 @@ async fn cancelled_turn_skips_launch_but_preserves_existing_work(trigger: Compac
                 config.model_context_window = Some(100_000);
                 config.model_auto_compact_token_limit = Some(90_000);
                 config.model_provider = provider;
-                config.chatgpt_base_url = Some(server_uri);
+                config.chatgpt_base_url = server_uri;
                 config.features.enable(Feature::AsyncCompaction).unwrap();
                 config.features.disable(Feature::TokenBudget).unwrap();
             },
@@ -65,6 +65,7 @@ async fn cancelled_turn_skips_launch_but_preserves_existing_work(trigger: Compac
             total_tokens: 70_000,
             ..Default::default()
         }),
+        /*includes_reasoning*/ false,
     )
     .await
     .expect("record usage");

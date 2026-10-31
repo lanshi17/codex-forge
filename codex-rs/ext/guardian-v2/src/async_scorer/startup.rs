@@ -13,8 +13,6 @@ use codex_login::AgentIdentityAuthPolicy;
 use codex_login::AuthManager;
 use codex_login::CodexAuth;
 use codex_model_provider::create_model_provider;
-use codex_model_provider_info::DEFAULT_PROVIDER_ID;
-use codex_model_provider_info::OPENAI_PROVIDER_ID;
 
 use super::decisions::DecisionsError;
 use super::decisions::DecisionsSampler;
@@ -63,10 +61,7 @@ pub(super) fn decisions_api_key(
 ) -> Result<String, DecisionsError> {
     match std::env::var("CODEX_GUARDIAN_DECISIONS_API_KEY") {
         Ok(key) => Ok(key),
-        Err(std::env::VarError::NotPresent)
-            if matches!(provider_id, DEFAULT_PROVIDER_ID | OPENAI_PROVIDER_ID)
-                && base_url.is_none() =>
-        {
+        Err(std::env::VarError::NotPresent) if provider_id == "openai" && base_url.is_none() => {
             auth_manager
                 .auth_cached()
                 .as_ref()
@@ -106,7 +101,7 @@ pub(super) async fn sampler_config(
                     model, /*configured_window*/ None,
                 )
             });
-    let luna_compaction_hash = luna_model.and_then(|model| model.comp_hash);
+    let luna_compaction_hash = luna_model.and_then(|model| model.comp_hash.clone());
     LunaSamplerConfig {
         api_key_cyber_access_programs: ApiKeyCyberAccessPrograms::from_config(input.config),
         workspace_routing: input

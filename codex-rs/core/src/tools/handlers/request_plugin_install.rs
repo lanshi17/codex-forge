@@ -188,11 +188,11 @@ impl RequestPluginInstallHandler {
             })?;
         let tool = if self.presentation == ToolSuggestPresentation::RecommendationContext {
             let plugin_id = tool.id().to_string();
-            let credential = turn.provider.auth().await;
+            let auth = session.services.auth_manager.auth().await;
             let plugins_config = turn.config.plugins_config_input();
-            match codex_core_plugins::hydrate_selected_recommended_plugin_install_metadata_for_credential(
+            match codex_core_plugins::hydrate_selected_recommended_plugin_install_metadata(
                 &plugins_config,
-                credential.as_ref(),
+                auth.as_ref(),
                 tool,
             )
             .await
@@ -264,9 +264,9 @@ impl RequestPluginInstallHandler {
             .as_ref()
             .is_some_and(|response| response.action == ElicitationAction::Accept);
 
-        let credential = turn.provider.auth().await;
+        let auth = session.services.auth_manager.auth().await;
         let completed = if user_confirmed {
-            verify_request_plugin_install_completed(&session, &turn, mcp, &tool, credential.as_ref())
+            verify_request_plugin_install_completed(&session, &turn, mcp, &tool, auth.as_ref())
                 .await
         } else {
             false
@@ -402,14 +402,14 @@ async fn verify_request_plugin_install_completed(
     turn: &crate::session::turn_context::TurnContext,
     mcp: &codex_mcp::McpBinding,
     tool: &DiscoverableTool,
-    credential: Option<&codex_model_provider::ProviderCredential>,
+    auth: Option<&codex_login::CodexAuth>,
 ) -> bool {
     match tool {
         DiscoverableTool::Connector(connector) => refresh_missing_requested_connectors(
             session,
             turn,
             mcp,
-            credential,
+            auth,
             std::slice::from_ref(&connector.id),
             connector.id.as_str(),
         )
@@ -423,14 +423,14 @@ async fn verify_request_plugin_install_completed(
                     refresh_remote_installed_plugins_cache_after_install(
                         session,
                         turn,
-                        credential,
+                        auth,
                         plugin.id.as_str(),
                     ),
                     refresh_missing_requested_connectors(
                         session,
                         turn,
                         mcp,
-                        credential,
+                        auth,
                         &plugin.app_connector_ids,
                         plugin.id.as_str(),
                     )
@@ -454,7 +454,7 @@ async fn verify_request_plugin_install_completed(
                 session,
                 turn,
                 mcp,
-                credential,
+                auth,
                 &plugin.app_connector_ids,
                 plugin.id.as_str(),
             )
@@ -467,15 +467,15 @@ async fn verify_request_plugin_install_completed(
 async fn refresh_remote_installed_plugins_cache_after_install(
     session: &crate::session::session::Session,
     turn: &crate::session::turn_context::TurnContext,
-    credential: Option<&codex_model_provider::ProviderCredential>,
+    auth: Option<&codex_login::CodexAuth>,
     tool_id: &str,
 ) {
     let plugins_manager = &session.services.plugins_manager;
     let plugins_config = turn.config.plugins_config_input();
     if let Err(err) = plugins_manager
-        .build_and_cache_remote_installed_plugin_marketplaces_for_credential(
+        .build_and_cache_remote_installed_plugin_marketplaces(
             &plugins_config,
-            credential,
+            auth,
             &[REMOTE_GLOBAL_MARKETPLACE_NAME],
             /*on_effective_plugins_changed*/ None,
         )
@@ -497,7 +497,7 @@ async fn refresh_missing_requested_connectors(
     session: &Arc<crate::session::session::Session>,
     turn: &crate::session::turn_context::TurnContext,
     mcp: &codex_mcp::McpBinding,
-    credential: Option<&codex_model_provider::ProviderCredential>,
+    auth: Option<&codex_login::CodexAuth>,
     expected_connector_ids: &[String],
     tool_id: &str,
 ) -> Option<Vec<AppInfo>> {
@@ -517,7 +517,7 @@ async fn refresh_missing_requested_connectors(
                 connectors::accessible_connectors_from_mcp_tools(&mcp_tools);
             connectors::refresh_accessible_connectors_cache_from_mcp_tools(
                 &turn.config,
-                credential,
+                auth,
                 &mcp_tools,
             );
             Some(accessible_connectors)

@@ -159,7 +159,7 @@ async fn daybreak_metadata_follows_the_actual_plugin_call(case: AccessCase) -> R
     let mut builder = test_codex()
         .with_home(home)
         .with_auth(auth)
-        .with_config(move |config| config.chatgpt_base_url = Some(base_url));
+        .with_config(move |config| config.chatgpt_base_url = base_url);
     if let Some(remote_url) = &remote_url {
         builder = builder.with_exec_server_url(remote_url.clone());
     }
@@ -355,7 +355,7 @@ async fn daybreak_discards_in_flight_account_changes_without_apps() -> Result<()
         .with_home(home)
         .with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing())
         .with_config(move |config| {
-            config.chatgpt_base_url = Some(base_url);
+            config.chatgpt_base_url = base_url;
             config
                 .features
                 .disable(Feature::Apps)

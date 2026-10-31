@@ -7,7 +7,7 @@ use pretty_assertions::assert_eq;
 fn capability_overrides_preserve_unspecified_provider_defaults() {
     for info in [
         ModelProviderInfo::default(),
-        ModelProviderInfo::create_openai_compatible_provider(/*base_url*/ None),
+        ModelProviderInfo::create_openai_provider(/*base_url*/ None),
         ModelProviderInfo {
             name: "Azure".to_string(),
             ..Default::default()

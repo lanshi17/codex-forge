@@ -17,6 +17,7 @@ async fn yielded_skill_read_keeps_originating_turn_metadata() -> Result<()> {
         &mut extensions,
         SkillProviders::new().with_cloud_provider(Arc::new(FakeCloudSkillProvider {
             catalog: SkillCatalog {
+                is_partial: false,
                 entries: vec![SkillCatalogEntry::new(
                     SkillPackageId(PACKAGE.to_string()),
                     SkillAuthority::new(SkillSourceKind::Cloud, CODEX_APPS_MCP_SERVER_NAME),
@@ -35,6 +36,8 @@ async fn yielded_skill_read_keeps_originating_turn_metadata() -> Result<()> {
         })),
         |config: &Config| SkillsExtensionConfig {
             include_instructions: config.include_skill_instructions,
+            catalog_deltas_enabled: config.features.enabled(Feature::SkillCatalogDeltas),
+            omit_descriptions: false,
             max_context_tokens: config.skill_max_context_tokens,
             bundled_skills_enabled: false,
             cloud_skill_enabled: true,
@@ -51,7 +54,7 @@ async fn yielded_skill_read_keeps_originating_turn_metadata() -> Result<()> {
             model.experimental_supported_tools = vec!["test_sync_tool".to_string()];
         })
         .with_config(move |config| {
-            config.chatgpt_base_url = Some(chatgpt_base_url);
+            config.chatgpt_base_url = chatgpt_base_url;
             config.cloud_skill_enabled = true;
             config.features.enable(Feature::CodeMode).unwrap();
             config.features.enable(Feature::CodeModeHost).unwrap();

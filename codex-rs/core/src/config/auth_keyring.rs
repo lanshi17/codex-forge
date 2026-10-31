@@ -23,7 +23,7 @@ impl Config {
             auth_credentials_store_mode: self.cli_auth_credentials_store_mode,
             keyring_backend_kind: self.auth_keyring_backend_kind(),
             forced_login_method: self.forced_login_method,
-            chatgpt_base_url: self.chatgpt_base_url.clone(),
+            chatgpt_base_url: Some(self.chatgpt_base_url.clone()),
             forced_chatgpt_workspace_id: self.forced_chatgpt_workspace_id.clone(),
             managed_auth_policy: self.config_layer_stack.requirements().managed_auth_policy(),
             auth_route_config: self.auth_route_config(),

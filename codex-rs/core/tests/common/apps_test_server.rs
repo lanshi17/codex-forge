@@ -310,7 +310,7 @@ fn configure_apps(config: &mut Config, apps_base_url: &str) {
         .features
         .enable(Feature::Apps)
         .expect("test config should allow feature update");
-    config.chatgpt_base_url = Some(apps_base_url.to_string());
+    config.chatgpt_base_url = apps_base_url.to_string();
 }
 
 pub fn configure_search_capable_apps(config: &mut Config, apps_base_url: &str) {

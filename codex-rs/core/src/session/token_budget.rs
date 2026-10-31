@@ -4,8 +4,9 @@ use crate::config::Config;
 use crate::config::TokenBudgetConfig;
 use crate::config::resolve_token_budget_config;
 use crate::context::ContextualUserFragment;
+use codex_config::config_toml::ConfigToml;
 use codex_features::Feature;
-use codex_model_provider::ProviderCredential;
+use codex_login::CodexAuth;
 use codex_protocol::account::PlanType;
 use codex_protocol::auth::AuthMode;
 use codex_protocol::openai_models::ModelInfo;
@@ -20,7 +21,7 @@ fn experimental_context_is_eligible(auth_mode: AuthMode, plan_type: Option<PlanT
 
 pub(super) fn apply_experimental_context(
     config: &mut Config,
-    auth: Option<&ProviderCredential>,
+    auth: Option<&CodexAuth>,
     starting_model: &ModelInfo,
 ) -> std::io::Result<()> {
     let provider = &config.model_provider;
@@ -33,12 +34,7 @@ pub(super) fn apply_experimental_context(
         || provider.auth.is_some()
         || provider.aws.is_some()
         || !auth.is_some_and(|auth| {
-            auth.auth_mode.is_some_and(|mode| {
-                experimental_context_is_eligible(
-                    mode,
-                    auth.account.as_ref().and_then(|account| account.plan_type),
-                )
-            })
+            experimental_context_is_eligible(auth.auth_mode(), auth.account_plan_type())
         })
         || config.features.enable(Feature::TokenBudget).is_err()
         || !config.features.enabled(Feature::TokenBudget)
@@ -47,10 +43,7 @@ pub(super) fn apply_experimental_context(
     }
 
     if config.token_budget.is_none() {
-        let config_toml = config
-            .config_layer_stack
-            .effective_config()
-            .try_into()
+        let config_toml = ConfigToml::try_from(config.config_layer_stack.effective_config())
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
         config.token_budget = resolve_token_budget_config(&config_toml, &config.features)?;
     }

@@ -396,7 +396,7 @@ async fn uses_cache_when_version_matches() -> Result<()> {
 
     let mut builder = test_codex().with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing());
     let identity = codex_model_provider::test_support::models_cache_entry(
-        &codex_model_provider_info::ModelProviderInfo::create_openai_compatible_provider(Some(format!(
+        &codex_model_provider_info::ModelProviderInfo::create_openai_provider(Some(format!(
             "{}/v1",
             server.uri()
         ))),
@@ -471,7 +471,7 @@ async fn refreshes_when_cache_version_missing() -> Result<()> {
 
     let mut builder = test_codex().with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing());
     let identity = codex_model_provider::test_support::models_cache_entry(
-        &codex_model_provider_info::ModelProviderInfo::create_openai_compatible_provider(Some(format!(
+        &codex_model_provider_info::ModelProviderInfo::create_openai_provider(Some(format!(
             "{}/v1",
             server.uri()
         ))),
@@ -531,7 +531,7 @@ async fn refreshes_when_cache_version_differs() -> Result<()> {
 
     let mut builder = test_codex().with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing());
     let identity = codex_model_provider::test_support::models_cache_entry(
-        &codex_model_provider_info::ModelProviderInfo::create_openai_compatible_provider(Some(format!(
+        &codex_model_provider_info::ModelProviderInfo::create_openai_provider(Some(format!(
             "{}/v1",
             server.uri()
         ))),
@@ -643,6 +643,7 @@ fn test_remote_model(slug: &str, priority: i32) -> ModelInfo {
         available_access_programs: None,
         upgrade: None,
         model_messages: Some(ModelMessages {
+            apps: None,
             content_filter_guidance: None,
             persistent_instructions: None,
             tools: None,
@@ -675,7 +676,6 @@ fn test_remote_model(slug: &str, priority: i32) -> ModelInfo {
         effective_context_window_percent: 95,
         experimental_supported_tools: Vec::new(),
         input_modalities: default_input_modalities(),
-        used_fallback_model_metadata: false,
         supports_search_tool: false,
         supports_experimental_context: false,
         use_responses_lite: false,

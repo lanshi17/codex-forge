@@ -63,7 +63,7 @@ async fn standalone_codex_apps_respects_protocol_setting(
                     .enable(Feature::CodexAppsMcp20260728)
                     .expect("test config should allow Apps protocol override");
             }
-            config.chatgpt_base_url = Some(apps_base_url);
+            config.chatgpt_base_url = apps_base_url;
         })
         .build_with_auto_env(&server)
         .await?;

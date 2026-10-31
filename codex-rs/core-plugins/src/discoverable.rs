@@ -12,6 +12,7 @@ use crate::OPENAI_CURATED_MARKETPLACE_NAME;
 use crate::PluginsConfigInput;
 use crate::PluginsManager;
 use crate::marketplace::MarketplacePluginInstallPolicy;
+use crate::remote::InstalledPluginDisplayAssets;
 use crate::remote::REMOTE_GLOBAL_MARKETPLACE_NAME;
 
 const TOOL_SUGGEST_DISCOVERABLE_PLUGIN_ALLOWLIST: &[&str] = &[
@@ -87,83 +88,13 @@ impl PluginsManager {
             .context("failed to list plugin marketplaces for tool suggestions")?
             .marketplaces;
         let remote_installed_marketplaces = if use_remote_global_catalog {
-            self.build_remote_installed_plugin_marketplaces_from_cache(&[
-                REMOTE_GLOBAL_MARKETPLACE_NAME,
-            ])
-        } else {
-            None
-        };
-        let remote_plugins = match auth {
-            Some(auth) if use_remote_global_catalog => {
-                Some(self.cached_global_remote_discoverable_plugins_for_config(&input.plugins, Some(auth)))
-            }
-            _ => None,
-        };
-        self.list_tool_suggest_discoverable_plugins_from_marketplaces(
-            input,
-            marketplaces,
-            remote_installed_marketplaces,
-            remote_plugins.unwrap_or_default(),
-        )
-        .await
-    }
-
-    /// Neutral variant of [`Self::list_tool_suggest_discoverable_plugins`]
-    /// for callers holding only a provider credential snapshot.
-    pub async fn list_tool_suggest_discoverable_plugins_for_credential(
-        &self,
-        input: &ToolSuggestPluginDiscoveryInput,
-        credential: Option<&codex_model_provider::ProviderCredential>,
-    ) -> anyhow::Result<Vec<ToolSuggestDiscoverablePlugin>> {
-        if !input.plugins.plugins_enabled {
-            return Ok(Vec::new());
-        }
-
-        let use_remote_global_catalog = input.plugins.remote_plugin_enabled
-            && credential.is_some_and(|credential| credential.uses_backend_routes);
-        let marketplaces = self
-            .list_marketplaces_for_config(
-                &input.plugins,
-                &[],
-                /*include_openai_curated*/ !use_remote_global_catalog,
-            )
-            .context("failed to list plugin marketplaces for tool suggestions")?
-            .marketplaces;
-        let remote_installed_marketplaces = if use_remote_global_catalog {
-            self.build_remote_installed_plugin_marketplaces_from_cache_for_credential(
-                credential,
+            self.build_remote_installed_plugin_marketplaces_from_cache_with_display_assets(
                 &[REMOTE_GLOBAL_MARKETPLACE_NAME],
+                InstalledPluginDisplayAssets::Skip,
             )
         } else {
             None
         };
-        let remote_plugins = match credential {
-            Some(credential) if use_remote_global_catalog => {
-                Some(
-                    self.cached_global_remote_discoverable_plugins_for_credential(
-                        &input.plugins,
-                        Some(credential),
-                    ),
-                )
-            }
-            _ => None,
-        };
-        self.list_tool_suggest_discoverable_plugins_from_marketplaces(
-            input,
-            marketplaces,
-            remote_installed_marketplaces,
-            remote_plugins.unwrap_or_default(),
-        )
-        .await
-    }
-
-    async fn list_tool_suggest_discoverable_plugins_from_marketplaces(
-        &self,
-        input: &ToolSuggestPluginDiscoveryInput,
-        marketplaces: Vec<crate::manager::ConfiguredMarketplace>,
-        remote_installed_marketplaces: Option<Vec<crate::remote::RemoteMarketplace>>,
-        remote_plugins: Vec<crate::remote::RemoteDiscoverablePlugin>,
-    ) -> anyhow::Result<Vec<ToolSuggestDiscoverablePlugin>> {
         let skill_config_rules = skill_config_rules_from_stack(&input.plugins.config_layer_stack);
 
         let mut discoverable_plugins = Vec::<ToolSuggestDiscoverablePlugin>::new();
@@ -227,7 +158,9 @@ impl PluginsManager {
                 .flat_map(|marketplace| marketplace.plugins.iter())
                 .map(|plugin| plugin.remote_plugin_id.clone())
                 .collect::<HashSet<_>>();
-            for plugin in remote_plugins {
+            for plugin in
+                self.cached_global_remote_discoverable_plugins_for_config(&input.plugins, auth)
+            {
                 let is_configured_plugin = input
                     .configured_plugin_ids
                     .contains(plugin.config_id.as_str())
@@ -273,8 +206,6 @@ impl PluginsManager {
         Ok(discoverable_plugins)
     }
 }
-
-
 
 fn is_tool_suggest_fallback_plugin(plugin_id: &str) -> bool {
     if TOOL_SUGGEST_DISCOVERABLE_PLUGIN_ALLOWLIST.contains(&plugin_id) {
