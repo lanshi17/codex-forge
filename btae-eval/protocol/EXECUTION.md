@@ -1,0 +1,41 @@
+# 正式运行与证据收集（诊断运行器已实现，正式执行待实现）
+
+用户已选：ark / deepseek-v4.1-flash，五组统一 DSH headless。此前 DSH 文本/工具 smoke 成功不等于本 Benchmark runner 或 BTAE 六机制已经实现。
+
+## 冻结清单
+
+记录模型实际返回标识/不可变 revision（若供应商不可提供则明确研究降级）、temperature/top_p/seed 支持及压缩策略、DSH 可执行文件版本/内容哈希、脱敏 Profile 摘要、MCP 工具版本、镜像 digest、Python 版本、仓库 commit/文件摘要、任务/Prompt/机制代码摘要、价格生效日期。禁止将 API key 值写入配置、命令行或轨迹。
+
+所有 arm 的框架 Profile 必须等价，仅干预附件和机制调度不同。外部 DSH CLI 是否需要 Node 属于 Worker 部署依赖；Rust 评分工具不依赖该 Runtime。主控不得借助同机全权限 DSH 自动去读取 evaluator-private 以便“完成任务”。
+
+## 已实现：受隔离的假 Worker 诊断
+
+Linux diagnose 从固定 plan 选择第1轮 task/arm/repeat，只按源文件清单导出公开仓库与 arm SOP，检查文件 SHA256。启动器使用 Bubblewrap 隔离 user/pid/network/mount namespace；仅导出 `/usr`、`/lib`、`/lib64` 运行依赖、单个 Worker 可执行文件、只读任务输入和可写的分配工作区。宿主 HOME、项目根、评估私有文件和环境变量不继承。命令使用 argv 数组和 stdin 文件，没有 sh -c。
+
+主控监督：包含公开输入导出与代码快照清点的总 wall 时限、跨尝试累计 token 计数、每次尝试日志总字节上限、单条 JSONL 上限、最大尝试次数；只重试普通 Worker 非零退出。取消由宿主 cancel-file 发起；超时/取消终止进程组，Bubblewrap PID namespace 与 die-with-parent 覆盖孙进程和主控意外退出。没有自动从 PID 猜测恢复或重跑已中断任务。
+
+每个输出目录仅创建一次。started.json 在导出/启动之前写入；setup 失败或主控中断时保留它，缺少 diagnostic.json 表示未完成，不等于代码失败。每次尝试保留原始 stdout/stderr、attempt.json 和完整 workspace-snapshot，重试沿实际 workspace 继续；最终 diagnostic.json 绑定 plan、manifest、可执行文件和产物摘要。verify-diagnostic 检查文件集合、内容摘要、快照、日志长度、计划身份、尝试序列、累计计数和最终状态一致性。这是可信宿主上的误改检测，不是签名，不能抵抗能重写整个证据包的恶意宿主。
+
+预算时点：在冻结输入校验后、创建输出目录前启动 episode 时钟；截止判断持续到各次快照及最终产物清点完成，最终 JSON 凭据的写入耗时不在该已封存时点中。代码执行虽成功但封存前已超时，汇总仍标记 timed_out。
+
+所有诊断均标记 runner_diagnostic_only，隐藏测试和真实任务成功值保持 null。fixture usage 是协议自报，不能视作服务商账单；超限检测可能在一次累计 usage 消息到达后才发现越界，记录实际越界数而不截成限额。将来真实模型必须另接可信 usage、最大生成参数和费用控制。
+
+当前仅 Linux 假 Worker 的进程与隔离路径经过测试；实际 DSH 适配、真实凭据/网络授权、资源 cgroup/磁盘配额、完整 seccomp、长期轨迹调度和正式结果收集仍待实现。
+
+## 正式运行器待实施接口
+
+1. 从 plan 中领取下一合法任务（同轨迹前一轮已封存）；校验所有摘要。
+2. 仅导出该仓库公开文件、共同请求、所分配 arm SOP 到受限 Worktree/容器；不挂载本 checkout、Gold、隐藏测试、其他组或共享记忆。Git Worktree 只是组织隔离，不能替代 OS 边界。
+3. 受控进程使用固定可执行文件+argv，stdin 传 prompt；不经 sh -c。捕获 JSONL、退出码、版本与实际账单，限制日志、进程组、网络和成本。
+4. 主控封存 pre-edit 影响集，执行 arm 机制；每一重试关联同一 run 并消耗共同预算。机制辅助模型同型号同账本，不能引入免费的更强 Reviewer。
+5. 封存轮末 snapshot，包括失败；后续轮次沿该实际 snapshot，不偷偷用参考修复救场。无法继续时保留原因与计划分母，不丢整条轨迹。
+6. 将 snapshot 交独立 evaluator，运行冻结的隐藏检查，不向开发 Agent 反馈答案。开发中的 E Evidence Gate 只访问各组可见的公开条件。
+7. 可信收集器产生 Observation，核对 plan/run/task/trajectory/model/config/artifact digest 一致性。原始失败结果不可覆盖，追加重试和裁决记录。
+
+当前 CLI 提供 diagnose/verify-diagnostic，但仍不提供真实 execute/collect/auto-analyze。score 接受 JSON 是数学接口，data_kind 只是来源标签而非认证；任何人都能构造它，不能把该标签当独立评估证明。bootstrap 接收聚合均值也不验证计划完整性，必须经过外部收集/配对/审计后使用。
+
+## 成本事件
+
+记录 input/output/cached_input（cache 是 input 子集）、工具数、尝试次数、wall 秒、参与者分钟、模型费用、计算费用、人类费用与价格版本。按 stage 分类但不重复相加；包含设计/检索/审批/验证、失败与取消。推理隐藏 token 和 provider usage 缺失单独标注，严禁估计为 0 后暗称实测。
+
+每条评估 Observation 需能追溯到 run_id、冻结 plan、被测 snapshot 和 evaluator 测试版本。此版本样例中的 hidden_test_passed 是夹具常量，不是运行了隐藏测试。
