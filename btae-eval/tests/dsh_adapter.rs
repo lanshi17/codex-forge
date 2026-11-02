@@ -807,3 +807,106 @@ fn partial_usage_rejects_totals_below_known_token_lower_bounds() {
         assert!(matches!(parse(&input), Err(DshError::Usage(_))));
     }
 }
+
+#[test]
+fn reasoning_equal_to_output_is_a_valid_subset_boundary() {
+    let input = format!(
+        "{OPEN}{{\"type\":\"status\",\"phase\":\"step_end\",\"turn\":1,\"step\":1,\"usage\":{{\"inputTokens\":5,\"cacheReadTokens\":0,\"cacheWriteTokens\":0,\"outputTokens\":5,\"reasoningTokens\":5,\"totalTokens\":10}}}}\n{CLOSE}"
+    );
+    let summary = parse_ok(&input);
+    assert!(summary.completed);
+    assert_eq!(summary.usage_status, UsageStatus::Complete);
+    assert_eq!(summary.usage.input_tokens, Some(5));
+    assert_eq!(summary.usage.output_tokens, Some(5));
+    assert_eq!(summary.usage.total_tokens, Some(10));
+    assert_eq!(summary.usage.reasoning_tokens, Some(5));
+    assert!(summary.usage_coverage.reasoning_tokens.complete);
+}
+
+#[test]
+fn exact_total_byte_limit_accepts_whole_and_chunked_real_transcripts() {
+    let bytes = include_bytes!("fixtures/dsh-live-smoke.jsonl");
+    for chunk_size in [1, 2, 7, bytes.len()] {
+        let limits = DshLimits {
+            max_total_bytes: bytes.len(),
+            ..DshLimits::default()
+        };
+        let mut adapter = DshAdapter::new(limits);
+        for chunk in bytes.chunks(chunk_size) {
+            adapter
+                .feed(chunk)
+                .expect("the exact total limit is inclusive");
+        }
+        let summary = adapter.finish(Some(0)).unwrap();
+        assert!(summary.completed);
+        assert_eq!(summary.bytes_received, bytes.len() as u64);
+
+        let mut too_small = DshAdapter::new(DshLimits {
+            max_total_bytes: bytes.len() - 1,
+            ..limits
+        });
+        let mut error = None;
+        for chunk in bytes.chunks(chunk_size) {
+            if let Err(received) = too_small.feed(chunk) {
+                error = Some(received);
+                break;
+            }
+        }
+        assert!(
+            matches!(error, Some(DshError::TotalBytesLimit { limit }) if limit == bytes.len() - 1)
+        );
+        assert!(matches!(too_small.finish(Some(0)), Err(DshError::Poisoned)));
+    }
+}
+
+#[test]
+fn turn_end_with_an_open_step_is_a_terminal_protocol_error() {
+    let input = format!("{OPEN}{TURN_DONE}");
+    let mut adapter = DshAdapter::new(DshLimits::default());
+    let error = adapter.feed(input.as_bytes()).unwrap_err();
+    assert!(
+        matches!(error, DshError::Protocol { event: 4, message } if message == "turn_end while a step is open")
+    );
+    assert!(matches!(adapter.feed(b""), Err(DshError::Poisoned)));
+    assert!(matches!(adapter.finish(Some(0)), Err(DshError::Poisoned)));
+}
+
+#[test]
+fn exact_line_byte_limit_accepts_content_before_a_later_lf() {
+    let bytes = include_bytes!("fixtures/dsh-live-smoke.jsonl");
+    let max_line_bytes = bytes
+        .split(|byte| *byte == b'\n')
+        .map(<[u8]>::len)
+        .max()
+        .unwrap();
+    for chunk_size in [1, 7, max_line_bytes] {
+        let limits = DshLimits {
+            max_line_bytes,
+            ..DshLimits::default()
+        };
+        let mut adapter = DshAdapter::new(limits);
+        for record in bytes.split_inclusive(|byte| *byte == b'\n') {
+            let content = record
+                .strip_suffix(b"\n")
+                .expect("fixture records end with LF");
+            for chunk in content.chunks(chunk_size) {
+                adapter
+                    .feed(chunk)
+                    .expect("exact line content limit is inclusive before LF");
+            }
+            adapter.feed(b"\n").expect("later LF terminates the record");
+        }
+        let summary = adapter.finish(Some(0)).unwrap();
+        assert!(summary.completed);
+        assert_eq!(summary.bytes_received, bytes.len() as u64);
+    }
+    let mut too_small = DshAdapter::new(DshLimits {
+        max_line_bytes: max_line_bytes - 1,
+        ..DshLimits::default()
+    });
+    assert!(
+        matches!(too_small.feed(bytes), Err(DshError::LineBytesLimit { limit }) if limit == max_line_bytes - 1)
+    );
+    assert!(matches!(too_small.feed(b""), Err(DshError::Poisoned)));
+    assert!(matches!(too_small.finish(Some(0)), Err(DshError::Poisoned)));
+}

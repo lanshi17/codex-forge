@@ -27,6 +27,7 @@ score/bootstrap 示例是人工构造的评分器夹具，不能当作研究结�
 | [候选数据](datasets/pilot.json) | 4 仓库 × 6 轮 × 5 组 × 3 重复 = 360 次计划执行 |
 | [运行器验证](reports/RUNNER-VALIDATION.md) | Linux 进程、预算、取消、隔离、快照与完整性验证；真实实验仍未运行 |
 | [DSH 适配器验收](reports/DSH-ADAPTER-ACCEPTANCE.md) | 真实 headless 调用、独立复验、缓存统计更正与超时记录；不是五组效果实验 |
+| [DSH 边界回归加固](reports/OMP-REVIEW-GAP-CLOSURE.md) | 58 项测试、4/4 定向变异与独立复核限制；无正式效果结果 |
 | [准备阶段报告](reports/PREPARATION.md) | 本次验证和未解决事项；没有效果数据 |
 
 当前任务只有 small 合成仓库、6 轮、单 Agent；不等于用户设想的中型项目、20–30 轮、多 Agent 或外部真实仓库验证。24 个 task 不是 24 个独立仓库；360 次执行形成 60 条分组轨迹，推断时仍要尊重 4 个仓库簇。

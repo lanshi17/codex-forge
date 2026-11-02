@@ -1,1 +1,2 @@
 [2026-11-02] Prepare independent Rust workspaces, DSH offline adapter, and OMP old-coder review [completed]
+[2026-11-02] Harden DSH parser boundaries with 58 passing tests and 4/4 targeted mutants; disclose final independent-review downgrade [completed]

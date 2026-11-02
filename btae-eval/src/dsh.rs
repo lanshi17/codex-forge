@@ -37,8 +37,10 @@ pub const USAGE_SOURCE: &str = "dsh_cli_self_reported";
 /// The exact CLI/usage schema this parser was verified against.
 ///
 /// The fixture set only covers CLI `0.2.1-rc.3` (`--profile headless`). A
-/// transcript that adds unknown event, status, session or usage fields is
-/// rejected rather than silently reinterpreted under a newer schema.
+/// transcript with unknown event types or unknown fields in validated
+/// session/status/usage/text/final records is rejected. Opaque thinking/tool/
+/// trace records retain only event counts; their payload fields are not
+/// validated. This schema identifier does not validate the producing CLI version.
 pub const USAGE_SCHEMA: &str = "dsh-headless-0.2.1-rc.3.usage-v1";
 
 /// Hard bounds applied while bytes are consumed, never after buffering them.
