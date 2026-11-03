@@ -1,12 +1,18 @@
 use btae_eval::{Budget, ClusterPair, Manifest, Observation};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, de::DeserializeOwned};
-use std::{collections::BTreeSet, error::Error, path::PathBuf, process::ExitCode};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    error::Error,
+    io::Read,
+    path::PathBuf,
+    process::ExitCode,
+};
 
 #[derive(Parser)]
 #[command(
     version,
-    about = "Offline BTAE experiment preparation; no model execution"
+    about = "BTAE preparation, sandbox diagnostics and explicit engineering process collection"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -18,6 +24,24 @@ enum Command {
     /// Run an isolated synthetic worker, not a real study or model.
     #[cfg(target_os = "linux")]
     Diagnose(Box<DiagnosticArgs>),
+    /// Collect one bounded external headless process (engineering smoke only).
+    #[cfg(target_os = "linux")]
+    Collect {
+        #[arg(long)]
+        executable: PathBuf,
+        #[arg(long = "arg", allow_hyphen_values = true)]
+        args: Vec<String>,
+        #[arg(long)]
+        prompt: Option<PathBuf>,
+        #[arg(long = "pass-env")]
+        environment: Vec<String>,
+        #[arg(long)]
+        cancel_file: Option<PathBuf>,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(long, default_value_t = 300_000)]
+        wall_ms: u64,
+    },
     /// Check a diagnostic's file hashes and its binding to a frozen run plan.
     #[cfg(target_os = "linux")]
     VerifyDiagnostic {
@@ -84,6 +108,64 @@ fn print(value: &impl serde::Serialize) -> Result<(), Box<dyn Error + Send + Syn
 }
 fn run(cli: Cli) -> Result<(), Box<dyn Error + Send + Sync>> {
     match cli.command {
+        #[cfg(target_os = "linux")]
+        Command::Collect {
+            executable,
+            args,
+            prompt,
+            environment,
+            cancel_file,
+            wall_ms,
+            output,
+        } => {
+            let mut prompt_bytes = Vec::new();
+            let reader: Box<dyn std::io::Read> = match prompt {
+                Some(path) => Box::new(std::fs::File::open(path)?),
+                None => Box::new(std::io::stdin()),
+            };
+            reader
+                .take((btae_eval::dsh_live::MAX_PROMPT_BYTES + 1) as u64)
+                .read_to_end(&mut prompt_bytes)?;
+            let mut child_env = BTreeMap::new();
+            for name in environment {
+                if name.is_empty()
+                    || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+                    || child_env.contains_key(&name)
+                {
+                    return Err("invalid or duplicate environment variable name".into());
+                }
+                let value = std::env::var(&name)
+                    .map_err(|_| "requested environment variable missing or not UTF-8")?;
+                child_env.insert(name, value);
+            }
+            let args = if args.is_empty() {
+                vec![
+                    "--profile".into(),
+                    "headless".into(),
+                    "--json".into(),
+                    "-".into(),
+                ]
+            } else {
+                args
+            };
+            let record = btae_eval::dsh_live::run_live(btae_eval::dsh_live::LiveRequest {
+                executable,
+                args,
+                prompt: prompt_bytes,
+                cwd: None,
+                environment: child_env,
+                cancel_file,
+                output,
+                limits: btae_eval::dsh_live::LiveLimits {
+                    wall_ms,
+                    ..Default::default()
+                },
+            })?;
+            print(&record)?;
+            if record.outcome != btae_eval::dsh_live::LiveOutcome::Completed {
+                return Err("engineering process did not complete; see collected record".into());
+            }
+        }
         #[cfg(target_os = "linux")]
         Command::Diagnose(args) => {
             let request = btae_eval::runner::DiagnosticRequest {

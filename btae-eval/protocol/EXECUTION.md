@@ -20,7 +20,11 @@ Linux diagnose 从固定 plan 选择第1轮 task/arm/repeat，只按源文件清
 
 所有诊断均标记 runner_diagnostic_only，隐藏测试和真实任务成功值保持 null。fixture usage 是协议自报，不能视作服务商账单；超限检测可能在一次累计 usage 消息到达后才发现越界，记录实际越界数而不截成限额。将来真实模型必须另接可信 usage、最大生成参数和费用控制。
 
-当前仅 Linux 假 Worker 的进程与隔离路径经过测试；实际 DSH 适配、真实凭据/网络授权、资源 cgroup/磁盘配额、完整 seccomp、长期轨迹调度和正式结果收集仍待实现。
+上述诊断路径仅覆盖 Linux 假 Worker。真实 DSH 的独立工程采集路径见下节；它尚未与该隔离运行器整合。资源 cgroup/磁盘配额、完整 seccomp、长期轨迹调度和正式结果收集仍待实现。
+
+## 已实现：Pure Rust DSH headless 工程采集器
+
+`src/dsh_live.rs` 提供 `collect` CLI 和 `run_live` API：固定 executable/argv、清空环境、显式环境 allowlist、非阻塞 stdin/stdout/stderr、进程组终止、超时/取消/输出上限、增量 `DshAdapter` 解析和 create-once 证据目录。它不会自行提供 bwrap/cgroup/endpoint allowlist；记录 `network_isolation=caller_supplied`，不生成正式 Observation，self-reported usage 始终 `billing_verified=false`。一次实际 DSH smoke 已完成，但仅作为工程连通性记录。
 
 ## 正式运行器待实施接口
 
@@ -32,7 +36,7 @@ Linux diagnose 从固定 plan 选择第1轮 task/arm/repeat，只按源文件清
 6. 将 snapshot 交独立 evaluator，运行冻结的隐藏检查，不向开发 Agent 反馈答案。开发中的 E Evidence Gate 只访问各组可见的公开条件。
 7. 可信收集器产生 Observation，核对 plan/run/task/trajectory/model/config/artifact digest 一致性。原始失败结果不可覆盖，追加重试和裁决记录。
 
-当前 CLI 提供 diagnose/verify-diagnostic，但仍不提供真实 execute/collect/auto-analyze。score 接受 JSON 是数学接口，data_kind 只是来源标签而非认证；任何人都能构造它，不能把该标签当独立评估证明。bootstrap 接收聚合均值也不验证计划完整性，必须经过外部收集/配对/审计后使用。
+当前 CLI 提供 diagnose/verify-diagnostic 和工程 smoke collect，但仍不提供正式 execute/auto-analyze。score 接受 JSON 是数学接口，data_kind 只是来源标签而非认证；任何人都能构造它，不能把该标签当独立评估证明。bootstrap 接收聚合均值也不验证计划完整性，必须经过外部收集/配对/审计后使用。
 
 ## 成本事件
 

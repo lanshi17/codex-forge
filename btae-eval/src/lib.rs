@@ -1,6 +1,8 @@
 //! Research preparation/scoring and explicitly separate sandboxed fixture diagnostics.
 pub mod dsh;
 #[cfg(target_os = "linux")]
+pub mod dsh_live;
+#[cfg(target_os = "linux")]
 pub mod runner;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
