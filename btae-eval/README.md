@@ -2,7 +2,7 @@
 
 状态：**DRAFT / NOT RUN**。本次交付实验协议、五组操作流程草案、24 条候选连续变更任务、4 个可运行的小型诊断仓库、Rust 排程/指标计算器、Linux 隔离诊断运行器、DSH 离线事件适配器、headless 工程采集器及反例测试。没有正式五组 Agent 比较结果，也没有“BTAE 优于 SDD”的结论。另有真实 DSH 工程派发和离线事件适配器验收，独立于研究数据。
 
-评估工具使用 Rust 2024；Python 只用于被测代码样例。工程是独立 Cargo Workspace，不依赖 Codex、DSH SDK 或 Forge 尚未实现的 Runtime。正式运行选择 ark / deepseek-v4.1-flash、统一 DSH headless，是用户已确认的配置；尚未冻结模型不可变版本、容器和 Profile 摘要。
+评估工具使用 Rust 2024；Python 只用于被测代码样例。工程是独立 Cargo Workspace，不依赖 Codex、DSH SDK 或 Forge 尚未实现的 Runtime。正式运行选择 commandcode / deepseek/deepseek-v4.1-flash、统一 DSH headless，是用户已确认的配置；尚未冻结模型不可变版本、容器和 Profile 摘要。
 
 ```sh
 cd btae-eval
@@ -21,6 +21,7 @@ score/bootstrap 示例是人工构造的评分器夹具，不能当作研究结�
 | [研究协议](protocol/STUDY.md) | 比较对象、主要终点、统计单位、失败规则、成本和判定标准 |
 | [机制规格](protocol/METHOD.md) | M1–M6 的输入/输出/约束与消融边界 |
 | [基线操作流程](baselines/README.md) | 五组差异、共同信息和实施忠实度 |
+| [DSH commandcode 配置](config/README.md) | 当前模型路由、专用 Profile、环境凭据与隔离任务命令 |
 | [执行与隔离](protocol/EXECUTION.md) | DSH 配置冻结、运行记录、隐藏评估与禁止泄漏 |
 | [标注手册](protocol/ANNOTATION.md) | 独立双人 Ground Truth、盲审和实体匹配 |
 | [依次实施任务](protocol/ROADMAP.md) | 运行真实 Pilot 前的剩余交付 |

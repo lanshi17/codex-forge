@@ -5,8 +5,8 @@
   "seed": 20261102,
   "repeats": 3,
   "model": {
-    "provider": "ark",
-    "name": "deepseek-v4.1-flash",
+    "provider": "commandcode",
+    "name": "deepseek/deepseek-v4.1-flash",
     "immutable_revision": null,
     "framework": "DSH headless",
     "framework_version": null,

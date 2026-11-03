@@ -1,6 +1,6 @@
 # 正式运行与证据收集（诊断运行器已实现，正式执行待实现）
 
-用户已选：ark / deepseek-v4.1-flash，五组统一 DSH headless。此前 DSH 文本/工具 smoke 成功不等于本 Benchmark runner 或 BTAE 六机制已经实现。
+用户已选：commandcode / deepseek/deepseek-v4.1-flash，五组统一 DSH headless。此前 DSH 文本/工具 smoke 成功不等于本 Benchmark runner 或 BTAE 六机制已经实现。
 
 ## 冻结清单
 
@@ -43,3 +43,5 @@ Linux diagnose 从固定 plan 选择第1轮 task/arm/repeat，只按源文件清
 记录 input/output/cached_input（cache 是 input 子集）、工具数、尝试次数、wall 秒、参与者分钟、模型费用、计算费用、人类费用与价格版本。按 stage 分类但不重复相加；包含设计/检索/审批/验证、失败与取消。推理隐藏 token 和 provider usage 缺失单独标注，严禁估计为 0 后暗称实测。
 
 每条评估 Observation 需能追溯到 run_id、冻结 plan、被测 snapshot 和 evaluator 测试版本。此版本样例中的 hidden_test_passed 是夹具常量，不是运行了隐藏测试。
+
+2026-11-03 模型路由改为 commandcode，等价于用户 `/model commandcode/deepseek/deepseek-v4.1-flash`。首轮连通性成功；带工具任务仍有 DSH runtime 错误，见[模型配置](../config/README.md)和[本轮验证](../reports/DSH-COMMANDCODE.md)。旧 ark 验收与 manifest 绑定保持历史记录。

@@ -9,3 +9,4 @@
 真实 DSH 任务 wrapper 尝试返回 `worker_failed`，DSH 报告 `ark` 凭据在 wrapper 内不可用；该私有运行没有发布凭据或原始 stderr。不能据此声称真实任务完成；低层 `collect` 的既有独立 DSH smoke 仍成功。OMP fresh blind review 超时，仅有初始记录，无有效 verdict，状态保持 `not performed`。
 
 尚未完成：正式五组 Pilot、跨轮轨迹恢复、Worktree DAG 调度、独立隐藏 evaluator、可信账单、cgroup/磁盘配额、endpoint allowlist 和模型不可变 revision 冻结。
+后续更新（2026-11-03）：用户指定 commandcode 路由，连通性成功；工具任务仍失败，独立最小探测发现 DSH `prepare` runtime 错误。[当前状态与用法](DSH-COMMANDCODE.md)。上文 ark 尝试属于历史记录。
