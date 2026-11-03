@@ -5,6 +5,7 @@
 | 日期 | 文档 | 状态 |
 | --- | --- | --- |
 | 2026-11-02 | [BTAE-Eval](active/2026-11-02-btae-eval.md) | in-progress；正式实验未运行 |
+| 2026-11-03 | [下一阶段推荐进度](active/2026-11-03-next-iteration.md) | P1 方法忠实度优先；Pilot 继续阻断 |
 | 2026-11-01 | [Superagent Forge 路线图](../superagent-forge/docs/ROADMAP.md) | F0 基线完成，F1 起待实施 |
 | 2026-11-02 | [OMP old-coder 审查](../btae-eval/reports/OMP-OLD-CODER-REVIEW.md) | 历史审查，边界已加固 |
 | 2026-11-02 | [DSH headless live collector](../btae-eval/reports/DSH-LIVE-COLLECTOR.md) | 73 测试、真实工程 smoke；正式 Pilot 未运行 |
