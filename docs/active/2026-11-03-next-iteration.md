@@ -1,7 +1,7 @@
 # 下一阶段推荐进度
 
-**Status:** in-progress  
-**Created:** 2026-11-03  
+**Status:** in-progress
+**Created:** 2026-11-03
 **Scope:** BTAE-Eval 研究线与 Superagent Forge 产品线分开推进
 
 当前仓库已经完成 Rust 评估器、DSH JSONL 适配、Linux 隔离诊断、首轮隔离任务收集和 DSH 工具运行时恢复。85 项 Rust 测试通过，commandcode 路由的工具任务工程复测通过。正式五组 Pilot 仍未运行，`check-ready` 继续阻断；这份文档给出下一阶段的推荐顺序。
