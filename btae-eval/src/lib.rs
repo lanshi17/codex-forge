@@ -4,6 +4,8 @@ pub mod dsh;
 pub mod dsh_live;
 #[cfg(target_os = "linux")]
 pub mod runner;
+#[cfg(target_os = "linux")]
+pub mod task_collect;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};

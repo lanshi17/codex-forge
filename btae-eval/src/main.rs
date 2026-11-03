@@ -42,6 +42,15 @@ enum Command {
         #[arg(long, default_value_t = 300_000)]
         wall_ms: u64,
     },
+    /// Export and collect one isolated first-round task (engineering only).
+    #[cfg(target_os = "linux")]
+    CollectTask(Box<TaskArgs>),
+    /// Verify sealed task artifacts against the frozen plan and public input.
+    #[cfg(target_os = "linux")]
+    VerifyTask {
+        directory: PathBuf,
+        manifest: PathBuf,
+    },
     /// Check a diagnostic's file hashes and its binding to a frozen run plan.
     #[cfg(target_os = "linux")]
     VerifyDiagnostic {
@@ -91,6 +100,37 @@ struct DiagnosticArgs {
     cancel_file: Option<PathBuf>,
 }
 
+#[cfg(target_os = "linux")]
+#[derive(clap::Args)]
+struct TaskArgs {
+    #[arg(long, default_value = "datasets/pilot.json")]
+    manifest: PathBuf,
+    #[arg(long)]
+    executable: PathBuf,
+    #[arg(long = "arg", allow_hyphen_values = true)]
+    args: Vec<String>,
+    #[arg(long)]
+    bundle: Option<PathBuf>,
+    #[arg(long)]
+    profile: Option<PathBuf>,
+    #[arg(long = "pass-env")]
+    environment: Vec<String>,
+    #[arg(long)]
+    share_network: bool,
+    #[arg(long)]
+    output: PathBuf,
+    #[arg(long, default_value = "queue-r01")]
+    task: String,
+    #[arg(long, default_value = "A")]
+    arm: String,
+    #[arg(long, default_value_t = 1)]
+    repeat: u32,
+    #[arg(long, default_value_t = 300_000)]
+    wall_ms: u64,
+    #[arg(long)]
+    cancel_file: Option<PathBuf>,
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ScoreInput {
@@ -108,6 +148,52 @@ fn print(value: &impl serde::Serialize) -> Result<(), Box<dyn Error + Send + Syn
 }
 fn run(cli: Cli) -> Result<(), Box<dyn Error + Send + Sync>> {
     match cli.command {
+        #[cfg(target_os = "linux")]
+        Command::CollectTask(args) => {
+            let mut environment = BTreeMap::new();
+            for name in args.environment {
+                if environment.contains_key(&name) {
+                    return Err("duplicate environment variable name".into());
+                }
+                let value = std::env::var(&name)
+                    .map_err(|_| "requested environment variable missing or not UTF-8")?;
+                environment.insert(name, value);
+            }
+            let record =
+                btae_eval::task_collect::collect_task(btae_eval::task_collect::TaskRequest {
+                    manifest: args.manifest,
+                    task_id: args.task,
+                    arm: args.arm,
+                    repeat: args.repeat,
+                    executable: args.executable,
+                    args: args.args,
+                    bundle: args.bundle,
+                    profile: args.profile,
+                    environment,
+                    share_network: args.share_network,
+                    output: args.output,
+                    cancel_file: args.cancel_file,
+                    limits: btae_eval::dsh_live::LiveLimits {
+                        wall_ms: args.wall_ms,
+                        ..Default::default()
+                    },
+                })?;
+            print(&record)?;
+            if record.outcome != "completed" {
+                return Err(
+                    "engineering task process did not complete; see sealed task receipt".into(),
+                );
+            }
+        }
+        #[cfg(target_os = "linux")]
+        Command::VerifyTask {
+            directory,
+            manifest,
+        } => {
+            print(&btae_eval::task_collect::verify_task(
+                &directory, &manifest,
+            )?)?;
+        }
         #[cfg(target_os = "linux")]
         Command::Collect {
             executable,

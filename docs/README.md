@@ -8,6 +8,7 @@
 | 2026-11-01 | [Superagent Forge 路线图](../superagent-forge/docs/ROADMAP.md) | F0 基线完成，F1 起待实施 |
 | 2026-11-02 | [OMP old-coder 审查](../btae-eval/reports/OMP-OLD-CODER-REVIEW.md) | 历史审查，边界已加固 |
 | 2026-11-02 | [DSH headless live collector](../btae-eval/reports/DSH-LIVE-COLLECTOR.md) | 73 测试、真实工程 smoke；正式 Pilot 未运行 |
+| 2026-11-03 | [DSH isolated task collector](../btae-eval/reports/DSH-TASK-COLLECTOR.md) | 85 测试、首轮隔离收集；真实任务凭据集成未通过，正式 Pilot 未运行 |
 | 2026-11-02 | [DSH 边界回归加固](../btae-eval/reports/OMP-REVIEW-GAP-CLOSURE.md) | 58 测试、4/4 定向变异通过；独立复核限制已披露 |
 | 2026-11-01 | [旧 Codex Fork 方案](archive/plans/2026-11-01-codex-core-minimal-fork.md) | retired，被独立 Pure Rust 方向替代 |
 

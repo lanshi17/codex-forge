@@ -232,7 +232,7 @@ pub fn inventory(root: &Path) -> Result<BTreeMap<String, String>> {
     Ok(hashes)
 }
 
-fn snapshot(source: &Path, destination: &Path) -> Result<String> {
+pub(crate) fn snapshot(source: &Path, destination: &Path) -> Result<String> {
     let hashes = inventory(source)?;
     fs::create_dir(destination)?;
     for name in hashes.keys() {
@@ -258,7 +258,12 @@ struct Snapshot {
     snapshot_sha256: String,
 }
 
-fn export_seed(root: &Path, m: &Manifest, repository: &str, workspace: &Path) -> Result<()> {
+pub(crate) fn export_seed(
+    root: &Path,
+    m: &Manifest,
+    repository: &str,
+    workspace: &Path,
+) -> Result<()> {
     if !plain_id(repository) {
         return Err(invalid("invalid repository id").into());
     }

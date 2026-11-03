@@ -92,6 +92,35 @@ fn main() -> ExitCode {
             }
             ExitCode::SUCCESS
         }
+        "task-isolation" => {
+            let task: serde_json::Value = serde_json::from_str(&input).unwrap();
+            assert_eq!(task["data_kind"], "dsh_task_engineering_only");
+            assert!(task["arm_instructions"].as_str().unwrap().len() > 10);
+            assert_eq!(std::env::var("HOME").unwrap(), "/tmp");
+            assert!(std::env::var_os("USER").is_none());
+            assert!(std::fs::read("api.py").is_ok());
+            assert_eq!(std::fs::read_dir("/input").unwrap().count(), 1);
+            assert!(std::fs::write("/input/task.json", "changed").is_err());
+            assert!(std::fs::write("/app/node", "changed").is_err());
+            if let Ok(probe) = std::env::var("BTAE_HOST_PROBE") {
+                assert!(std::fs::read(probe).is_err());
+            }
+            if let Ok(address) = std::env::var("BTAE_HOST_ADDRESS") {
+                let address = address.parse().unwrap();
+                assert!(
+                    std::net::TcpStream::connect_timeout(&address, Duration::from_millis(100))
+                        .is_err()
+                );
+            }
+            assert_eq!(std::env::var("BTAE_ALLOWED").unwrap(), "yes");
+            std::fs::write("worker-edit.txt", "isolated edit").unwrap();
+            print!(
+                "{}",
+                include_str!("../../tests/fixtures/dsh-live-smoke.jsonl")
+            );
+            io::stdout().flush().unwrap();
+            ExitCode::SUCCESS
+        }
         "success" => {
             print!(
                 "{}",

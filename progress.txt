@@ -1,3 +1,5 @@
 [2026-11-02] Prepare independent Rust workspaces, DSH offline adapter, and OMP old-coder review [completed]
 [2026-11-02] Harden DSH parser boundaries with 58 passing tests and 4/4 targeted mutants; disclose final independent-review downgrade [completed]
 [2026-11-03] Add Pure Rust bounded DSH headless collector; verify 73 tests, 3/3 behavioral mutants and final-source isolated engineering smoke [completed]
+
+[2026-11-03] Add first-round isolated task collector with plan-bound snapshots and offline verification; real DSH wrapper credential integration remains blocked [completed]
