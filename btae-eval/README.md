@@ -22,6 +22,7 @@ score/bootstrap 示例是人工构造的评分器夹具，不能当作研究结�
 | [机制规格](protocol/METHOD.md) | M1–M6 的输入/输出/约束与消融边界 |
 | [基线操作流程](baselines/README.md) | 五组差异、共同信息和实施忠实度 |
 | [DSH commandcode 配置](config/README.md) | 当前模型路由、专用 Profile、环境凭据与隔离任务命令 |
+| [DSH 工具部署检查](config/DSH-TOOLS.md) | 重复模块身份、修复/回滚与独立公开契约检查 |
 | [执行与隔离](protocol/EXECUTION.md) | DSH 配置冻结、运行记录、隐藏评估与禁止泄漏 |
 | [标注手册](protocol/ANNOTATION.md) | 独立双人 Ground Truth、盲审和实体匹配 |
 | [依次实施任务](protocol/ROADMAP.md) | 运行真实 Pilot 前的剩余交付 |

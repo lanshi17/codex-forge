@@ -9,3 +9,5 @@
 已有 85 项 Rust 测试通过，readiness 按预期退出 1。无 Rust 实现、依赖版本、预算和 readiness 声明变更；仅模型配置、共同研究输入和说明更新。本轮未新增独立审查，不继承历史审查 verdict；正式 Pilot 未运行。
 
 [配置与使用方法](../config/README.md) · [机器摘要](DSH-COMMANDCODE.json)。连通性与工具探测使用专用 profile、私有状态和 bwrap，显式共享网络。原始 Agent 输出、session、凭据及源码产物保留在本机，不发布。
+
+后续更新：`prepare` 异常已定位为重复包的模块 Symbol 身份不一致；部署去重后工具探测、真实隔离任务和独立公开契约检查通过。见[恢复验收](DSH-TOOLS-RECOVERY.md)。上文保留切换路由时的失败记录。

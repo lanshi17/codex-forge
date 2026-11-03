@@ -33,4 +33,4 @@ BTAE_TASK_DIR=$(mktemp -d /tmp/btae-commandcode.XXXXXX)
 ./target/debug/btae-eval verify-task "$BTAE_TASK_DIR/run" datasets/pilot.json
 ```
 
-`--share-network` 显式允许工程网络请求，没有 endpoint allowlist；所有输出目录必须新建。进程收据可能失败但仍能离线校验，校验通过不表示任务通过。当前单轮连通性成功，带工具任务仍受 DSH `prepare` runtime 错误阻断，见[本轮验收](../reports/DSH-COMMANDCODE.md)。Profile/state/session 和源码快照可能含敏感任务信息，不应整体发布。
+`--share-network` 显式允许工程网络请求，没有 endpoint allowlist；所有输出目录必须新建。进程收据可能失败但仍能离线校验，校验通过不表示任务通过。当前单轮连通性和工具任务工程验收均已通过：重复 dsh-tools 包造成的 `prepare` 错误已通过部署去重修复，见[部署检查与回滚](DSH-TOOLS.md)和[恢复验收](../reports/DSH-TOOLS-RECOVERY.md)。上面的 90 秒只是调用示例；本轮真实任务在 90 秒超时，另一次 180 秒上限的工程复测在约 103 秒完成，token 用量超过 Pilot 草案预算。Profile/state/session 和源码快照可能含敏感任务信息，不应整体发布。

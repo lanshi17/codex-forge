@@ -45,3 +45,5 @@ Linux diagnose 从固定 plan 选择第1轮 task/arm/repeat，只按源文件清
 每条评估 Observation 需能追溯到 run_id、冻结 plan、被测 snapshot 和 evaluator 测试版本。此版本样例中的 hidden_test_passed 是夹具常量，不是运行了隐藏测试。
 
 2026-11-03 模型路由改为 commandcode，等价于用户 `/model commandcode/deepseek/deepseek-v4.1-flash`。首轮连通性成功；带工具任务仍有 DSH runtime 错误，见[模型配置](../config/README.md)和[本轮验证](../reports/DSH-COMMANDCODE.md)。旧 ark 验收与 manifest 绑定保持历史记录。
+
+后续部署恢复：DSH 重复 dsh-tools 模块已去重，工具调用与真实首轮隔离任务完成，见[恢复验收](../reports/DSH-TOOLS-RECOVERY.md)。90 秒超时尝试同样保留。成功复测 token 用量超过草案预算，只能用于工程验收；正式 Pilot 门禁保持不变。
