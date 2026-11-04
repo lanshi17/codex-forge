@@ -175,13 +175,13 @@ jobs:
         include:
           - name: Linux
             runner: ubuntu-24.04
-            timeout_minutes: 30
+            timeout_minutes: 120
           - name: macOS
             runner: macos-15
-            timeout_minutes: 30
+            timeout_minutes: 120
           - name: Windows
             runner: windows-x64
-            timeout_minutes: 30
+            timeout_minutes: 120
             runs_on: windows-latest
     steps:
       - name: Check whether argument comment lint should run

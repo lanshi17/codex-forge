@@ -308,8 +308,17 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
                 "VOICE_WINDOWS_SYSTEM_ROOT": r"C:\Windows",
                 "VOICE_WINDOWS_HOST_ARCH": "AMD64",
             }
-            for cross_compile, remote in ((False, False), (True, False), (True, True)):
-                with self.subTest(cross_compile=cross_compile, remote=remote):
+            for cross_compile, remote, status_override in (
+                (False, False, None),
+                (True, False, None),
+                (True, True, None),
+                (False, False, "--workspace_status_command=./custom-status.cmd"),
+            ):
+                with self.subTest(
+                    cross_compile=cross_compile,
+                    remote=remote,
+                    status_override=status_override,
+                ):
                     case_env = dict(env)
                     if remote:
                         case_env["BUILDBUDDY_API_KEY"] = "fixture"
@@ -320,6 +329,7 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
                             *(["--windows-cross-compile"] if cross_compile else []),
                             "--",
                             "build",
+                            *([status_override] if status_override else []),
                             "--",
                             "//third_party/voice:pkg_config",
                         ],
@@ -330,6 +340,17 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     args = json.loads(capture.read_text())
+                    self.assertEqual(
+                        [
+                            arg
+                            for arg in args
+                            if arg.startswith("--workspace_status_command=")
+                        ],
+                        [
+                            status_override
+                            or "--workspace_status_command=./scripts/workspace-status.cmd"
+                        ],
+                    )
                     voice_args = [
                         r"--inject_repository=voice_windows_tools=D:\voice tools",
                         "--//third_party/voice:windows_installed_tools=@voice_windows_tools//:tools",

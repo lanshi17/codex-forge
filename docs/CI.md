@@ -22,4 +22,8 @@ macOS 后续修复使用相同 ARM64 架构的标准 `macos-15` 替代收费 `ma
 
 候选 e877f37a84bacabb911478e0f34c539985987de7 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41801889312)确认 Windows 许可输入为 `1`，许可步骤实际执行且构建越过许可检查。随后 Windows 语音规则因缺少固定 `SystemRoot` 失败；普通托管运行器还缺少旧私有机器预装的 Cygwin/pkgconf 工具。后续 Windows CI 使用现有离线安装脚本和 `openai/codex` 的固定摘要公开归档配置工具，并显式传入仓库、系统目录及宿主架构。远程 Linux 执行不接收这些 Windows 参数。该轮 collector 回归也发现非超时场景误用了 80 毫秒期限，后续仅对挂起场景使用短期限，保留错误类型、退出状态、管道关闭和封存校验。
 
+候选 80bc0a058c985ea9aeadf8c6018f51cf4ac788c1 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41804801667)中，BTAE、Forge、repo-checks、Fence、cargo-deny、格式及拼写检查通过，Windows 工具配置和原生依赖编译也已实际完成；但 Windows 运行时封存因 Bazel 状态文件缺少有效提交记录而失败，整轮仍不合格。后续 Windows 配置从 checkout 核验 SHA，显式选择原生状态脚本，并在大规模编译前构建轻量提交信息目标，验证 Bazel 文件中的 SHA。证据中的提交格式、唯一性和完整构建校验均保留。
+
+同轮 GitHub annotations 明确记录 SDK 超过 20 分钟，Bazel 和跨平台 lint 超过 30 分钟的作业期限，当时仍在冷构建。后续将这些托管构建作业上限设为 120 分钟，测试自身的期限、目标、分片、断言和必需检查均保留。超时仍导致 CI 不合格，延长作业上限不代表本轮已通过。
+
 工程 CI 合格与研究可以开跑是两个独立条件。即使 CI 通过，正式五组 Pilot 仍须通过方法忠实度、独立真值、隐藏评估、资源预算和环境冻结等 readiness 门禁，见[路线图](../btae-eval/protocol/ROADMAP.md)。

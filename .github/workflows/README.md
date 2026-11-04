@@ -58,6 +58,16 @@ and fixed `SystemRoot` and host architecture values. Windows paths are not passe
 to Linux remote build actions. Tool installations stay in the runner's temporary
 directory and are not added to release packages.
 
+Windows setup also verifies the checked-out Git SHA with the native workspace
+status helper. Before expensive compilation, a small Bazel build checks that
+the stable status file contains exactly that commit; runtime receipt validation
+continues to reject absent, malformed or ambiguous commit records.
+
+The initial hosted runs exceeded the former SDK 20-minute and Bazel/lint
+30-minute job limits while compiling. Those cold-build jobs now allow 120
+minutes. Individual test deadlines, targets, shards and required-check logic
+are unchanged; exceeding the job limit still fails qualification.
+
 ## Pull Requests
 
 - Required checks run against GitHub's synthetic merge commit, not the pull

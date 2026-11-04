@@ -324,6 +324,19 @@ if [[ -n "${CODEX_BAZEL_EXECUTION_LOG_COMPACT_DIR:-}" ]]; then
 fi
 
 if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+  # Use the same native status helper as Windows release builds. This command
+  # runs on the Windows client even when build actions execute on Linux RBE.
+  has_workspace_status_override=0
+  for arg in "${bazel_args[@]}"; do
+    if [[ "$arg" == --workspace_status_command=* ]]; then
+      has_workspace_status_override=1
+      break
+    fi
+  done
+  if [[ $has_workspace_status_override -eq 0 ]]; then
+    post_config_bazel_args+=(--workspace_status_command=./scripts/workspace-status.cmd)
+  fi
+
   pass_windows_build_env=1
   if [[ $windows_cross_compile -eq 1 && -n "${BUILDBUDDY_API_KEY:-}" ]]; then
     # Remote build actions execute on Linux RBE workers. Passing the Windows
