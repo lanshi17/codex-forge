@@ -10,6 +10,10 @@
 
 候选 84d48e44e71f28c5234871840060997f25d02564 的 [blocking-ci](https://github.com/lanshi17/codex-forge/actions/runs/41763111857) 已确认 repo-checks 和 superagent-forge 通过。BTAE-Eval 的畸形流测试因外层 500 毫秒耗时断言失败；后续修复让假 Worker 持续运行，改为验证协议错误、信号终止、管道关闭和任务期限内结束，避免将二进制哈希与共享 runner 调度当作性能门禁。修复候选 69bf40f7fde3b39f30c4411cd443d72eeaf83eb0 的[远端检查](https://github.com/lanshi17/codex-forge/actions/runs/41763744466)已确认两个独立 Workspace 和 repo-checks 通过，但当时仍存在 `Required runner group 'codex-forge-runners' not found` 及付款/支出限额两类启动阻塞。
 
-运行器修复将 PR、合并后检查及发布工作流中的仓库专属私有组/标签替换为同平台、同架构的 GitHub 托管标签，见[运行器映射](../.github/workflows/README.md#hosted-runners)。无需创建 `codex-forge-runners`。Windows ARM64 的测试仍在原生 ARM64 上执行，归档仍在 x64 上构建；检查步骤、目标、分片及汇总门禁保持原样。此变更需要新候选的远端运行验证，不能沿用旧提交的成功。macOS 的现有大型运行器及账户额度问题仍独立存在，尚不能宣布全部 CI 合格。
+运行器修复将 PR、合并后检查及发布工作流中的仓库专属私有组/标签替换为同平台、同架构的 GitHub 托管标签，见[运行器映射](../.github/workflows/README.md#hosted-runners)。无需创建 `codex-forge-runners`。Windows ARM64 的测试仍在原生 ARM64 上执行，归档仍在 x64 上构建；检查步骤、目标、分片及汇总门禁保持原样。
+
+候选 3d8c4e63ca9b02848bfda8acddda13fb9c8d63e8 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41764809761)确认 Windows 和 SDK 已获得标准托管运行器，Python SDK 安装测试通过，缺失组导致的启动问题已解决。该轮最终 cancelled，不能据此宣告 CI 合格。Windows 构建另因缺少 MSVC 许可确认而失败；MODULE.bazel 要求由已接受条款的用户显式确认。后续配置仅在 Windows 上转发管理员显式设置的仓库变量 `BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA=1`，未设置时保持原有许可检查。
+
+macOS 后续修复使用相同 ARM64 架构的标准 `macos-15` 替代收费 `macos-15-xlarge`，原有 Intel 选择及交叉编译目标不变。所有后续修复仍需新候选的远端检查通过；旧提交的成功、作业已启动或本地配置验证均不能替代完整 CI 验收。
 
 工程 CI 合格与研究可以开跑是两个独立条件。即使 CI 通过，正式五组 Pilot 仍须通过方法忠实度、独立真值、隐藏评估、资源预算和环境冻结等 readiness 门禁，见[路线图](../btae-eval/protocol/ROADMAP.md)。

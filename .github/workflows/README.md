@@ -26,14 +26,27 @@ group needs to be provisioned.
 | Linux ARM64   | `ubuntu-24.04-arm` |
 | Windows x64   | `windows-latest`   |
 | Windows ARM64 | `windows-11-arm`   |
+| macOS ARM64   | `macos-15`         |
+| macOS Intel   | `macos-15-intel`   |
 
 Windows ARM64 nextest archives are still built on x64 and executed on ARM64.
 Build targets, test shards, commands, and required dependencies are unchanged.
 Reusable nextest workflows retain optional runner-group inputs for callers
 that explicitly provision their own infrastructure; this repository does not
 pass those inputs. Standard hosted machines may take longer on cold builds
-than the previous private runners. macOS currently retains its existing
-`macos-15-xlarge` selection and associated billing requirements.
+than the previous private runners. macOS ARM64 uses the standard `macos-15`
+image instead of the paid `macos-15-xlarge` runner. Existing Intel runner
+selections and ARM64-hosted cross-build targets are retained. The matching
+architectures are listed in the [official runner image inventory](https://github.com/actions/runner-images#available-images).
+
+Windows Bazel targets that materialize the MSVC runtime require explicit
+Visual Studio license acknowledgement. After the repository owner confirms
+acceptance of the [Microsoft terms](https://visualstudio.microsoft.com/license-terms),
+an administrator may set repository Actions variable
+`BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA` to `1`. `prepare-bazel-ci` forwards that
+acknowledgement only on Windows. An absent or different value leaves the
+existing license check closed; Linux and macOS receive no acknowledgement.
+No workflow accepts those terms automatically.
 
 ## Pull Requests
 
