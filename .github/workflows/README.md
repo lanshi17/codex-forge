@@ -14,6 +14,27 @@ The workflow is a required dependency of `blocking-ci` alongside the retained
 upstream checks. It can also be dispatched manually for diagnosis; a successful
 manual run alone does not satisfy the full merge gate. See [CI qualification](../../docs/CI.md).
 
+## Hosted runners
+
+CI and release workflows use GitHub-hosted runners instead of deriving private
+runner groups or labels from the repository name. No `codex-forge-runners`
+group needs to be provisioned.
+
+| Platform      | Hosted label       |
+| ------------- | ------------------ |
+| Linux x64     | `ubuntu-24.04`     |
+| Linux ARM64   | `ubuntu-24.04-arm` |
+| Windows x64   | `windows-latest`   |
+| Windows ARM64 | `windows-11-arm`   |
+
+Windows ARM64 nextest archives are still built on x64 and executed on ARM64.
+Build targets, test shards, commands, and required dependencies are unchanged.
+Reusable nextest workflows retain optional runner-group inputs for callers
+that explicitly provision their own infrastructure; this repository does not
+pass those inputs. Standard hosted machines may take longer on cold builds
+than the previous private runners. macOS currently retains its existing
+`macos-15-xlarge` selection and associated billing requirements.
+
 ## Pull Requests
 
 - Required checks run against GitHub's synthetic merge commit, not the pull

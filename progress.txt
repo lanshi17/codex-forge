@@ -8,3 +8,4 @@
 [2026-11-03] Add next-iteration recommendation: close BTAE P1/P2/P3 gates before Pilot and separate Pure Rust Forge F1 protocol work [completed]
 [2026-11-04] Prior delivery CI qualification is pending: repair active-source formatting, preserve frozen evidence, and require both independent Rust workspaces; retain GitHub billing failure as a blocker [in-progress]
 [2026-11-04] Remote repo-checks and Forge workspace passed on 84d48e44e; replace BTAE malformed-stream timing assertion with forced-termination checks; full CI still requires runner-group and billing recovery [in-progress]
+[2026-11-04] Replace repository-specific private runner groups and labels across CI/postmerge/release with same-platform hosted runners; preserve targets, shards and strict merge gate; remote validation pending [in-progress]

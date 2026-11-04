@@ -8,6 +8,8 @@
 
 2026-11-04 排查发现：437dd3f98080107429537885638e2f18eea3d0c2 的 [blocking-ci](https://github.com/lanshi17/codex-forge/actions/runs/41614407840) 失败，包含真实格式问题与 GitHub 账户付款/支出限额导致的作业未启动。修复格式不代表账户问题已经解除。此修复以候选分支交付，所有必需检查通过前不合并到 main；不删除原有跨平台任务，也不将失败改成可忽略。
 
-候选 84d48e44e71f28c5234871840060997f25d02564 的 [blocking-ci](https://github.com/lanshi17/codex-forge/actions/runs/41763111857) 已确认 repo-checks 和 superagent-forge 通过。BTAE-Eval 的畸形流测试因外层 500 毫秒耗时断言失败；后续修复让假 Worker 持续运行，改为验证协议错误、信号终止、管道关闭和任务期限内结束，避免将二进制哈希与共享 runner 调度当作性能门禁。该修复仍须在新候选上通过远端 CI。此轮还确认存在 `Required runner group 'codex-forge-runners' not found` 及付款/支出限额两类基础设施阻塞；仓库管理员须恢复所需运行器和账户额度，才能完成全部必需检查。
+候选 84d48e44e71f28c5234871840060997f25d02564 的 [blocking-ci](https://github.com/lanshi17/codex-forge/actions/runs/41763111857) 已确认 repo-checks 和 superagent-forge 通过。BTAE-Eval 的畸形流测试因外层 500 毫秒耗时断言失败；后续修复让假 Worker 持续运行，改为验证协议错误、信号终止、管道关闭和任务期限内结束，避免将二进制哈希与共享 runner 调度当作性能门禁。修复候选 69bf40f7fde3b39f30c4411cd443d72eeaf83eb0 的[远端检查](https://github.com/lanshi17/codex-forge/actions/runs/41763744466)已确认两个独立 Workspace 和 repo-checks 通过，但当时仍存在 `Required runner group 'codex-forge-runners' not found` 及付款/支出限额两类启动阻塞。
+
+运行器修复将 PR、合并后检查及发布工作流中的仓库专属私有组/标签替换为同平台、同架构的 GitHub 托管标签，见[运行器映射](../.github/workflows/README.md#hosted-runners)。无需创建 `codex-forge-runners`。Windows ARM64 的测试仍在原生 ARM64 上执行，归档仍在 x64 上构建；检查步骤、目标、分片及汇总门禁保持原样。此变更需要新候选的远端运行验证，不能沿用旧提交的成功。macOS 的现有大型运行器及账户额度问题仍独立存在，尚不能宣布全部 CI 合格。
 
 工程 CI 合格与研究可以开跑是两个独立条件。即使 CI 通过，正式五组 Pilot 仍须通过方法忠实度、独立真值、隐藏评估、资源预算和环境冻结等 readiness 门禁，见[路线图](../btae-eval/protocol/ROADMAP.md)。
