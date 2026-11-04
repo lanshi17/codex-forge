@@ -48,4 +48,8 @@ GitHub annotations 已确认该轮 SDK、Linux 发布构建及 macOS 测试再�
 
 该候选的 Windows 分片 1、2、Clippy 和发布构建已通过，Git 进程树目标也已实际通过。分片 3 的沙箱回归发现公共可写目录中的工作区外文件和 `.git` 被删除；不能通过收紧测试目录权限规避这一失败。令牌实现将 Everyone 放入写入限制 SID 集合，使公共 ACL 可能满足限制检查。后续移除这一身份，保留能力、显式附加身份和 logon SID，并新增令牌 SID 回归；原删除回归显式安装公共可写 ACL，仍要求工作区/TEMP/TMP 可删除、外部文件和 `.git` 保持完整。隔离的 Windows 目标交叉编译和 Clippy 已覆盖令牌模块、测试及新增 ACL 片段，但尚未在 Windows 实际运行，不能据此宣布权限修复通过验收。
 
-后续 Windows 分片 4 先运行 Git、PowerShell、PTY 和 Windows 沙箱四个单元测试目标，再执行原完整分片；两次调用复用相同参数与本机测试缓存，完整目标清单和汇总门禁保持原样。这样可在编译完整 Agent/TUI 前暴露运行期失败，减少下一轮定位的等待。
+该候选的分片 4 最终确认三个失败：文件监听去抖用例在真实 25 毫秒等待后提前返回，PowerShell parser 目标在 named-block 用例处超过 300 秒，ConPTY 的 ping 在 Ctrl-C 后仍持续回复。后续去抖回归使用 Tokio 虚拟时间，保留原有提前触发检查和批次内容断言；仅测试依赖启用 `test-util`。PowerShell 的可用性探测与管道 AST parser 使用 `CREATE_NO_WINDOW`，避免附着调用方控制台。ConPTY 回归重新执行于独立控制台测试子进程，显式恢复可继承的 Ctrl-C 默认策略，不修改测试宿主的全局状态；等待 ping 的中断统计后才提交恢复命令，原有中断、恢复及正常退出断言保留。
+
+本地文件监听、shell-command 和 PTY 三个 Linux 测试目标通过，文件监听和 shell-command 的库及测试二进制 Clippy 通过，Bazel 依赖锁检查通过。新增的 Windows 控制台调用片段与 PowerShell 命令构造函数通过 Windows 目标交叉编译和 Clippy；Windows PowerShell/ConPTY 行为仍待新候选的实际 CI 验收，不能把控制台继承假设当作已验证根因。
+
+后续 Windows 分片 4 先运行 Git、PowerShell、PTY、Windows 沙箱和文件监听五个单元测试目标，再执行原完整分片；两次调用复用相同参数与本机测试缓存，完整目标清单和汇总门禁保持原样。这样可在编译完整 Agent/TUI 前暴露运行期失败，减少下一轮定位的等待。

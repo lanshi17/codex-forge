@@ -10,7 +10,6 @@ use std::io::Write;
 use std::process::Child;
 use std::process::ChildStdin;
 use std::process::ChildStdout;
-use std::process::Command;
 use std::process::Stdio;
 use std::sync::LazyLock;
 use std::sync::Mutex;
@@ -113,7 +112,7 @@ struct PowershellParserProcess {
 
 impl PowershellParserProcess {
     fn spawn(executable: &str) -> std::io::Result<Self> {
-        let mut command = Command::new(executable);
+        let mut command = crate::powershell::non_interactive_powershell_command(executable);
         command
             .args([
                 "-NoLogo",
@@ -272,13 +271,23 @@ mod tests {
     use crate::powershell::try_find_powershell_executable_blocking;
     use pretty_assertions::assert_eq;
 
+    fn parser_fixture() -> Option<PowershellParserProcess> {
+        let thread = std::thread::current();
+        let name = thread.name().unwrap_or("parser");
+        trace_parser_fixture(name, "locating executable");
+        let powershell = try_find_powershell_executable_blocking()?;
+        trace_parser_fixture(name, "spawning");
+        let parser =
+            PowershellParserProcess::spawn(powershell.as_path().to_str().unwrap()).unwrap();
+        trace_parser_fixture(name, "ready for request");
+        Some(parser)
+    }
+
     #[test]
     fn parser_process_handles_multiple_requests() {
-        let Some(powershell) = try_find_powershell_executable_blocking() else {
+        let Some(mut parser) = parser_fixture() else {
             return;
         };
-        let powershell = powershell.as_path().to_str().unwrap();
-        let mut parser = PowershellParserProcess::spawn(powershell).unwrap();
 
         let first = parser.parse("Get-Content 'foo bar'").unwrap();
         assert_eq!(
@@ -301,11 +310,9 @@ mod tests {
 
     #[test]
     fn parser_process_rejects_stop_parsing_forms() {
-        let Some(powershell) = try_find_powershell_executable_blocking() else {
+        let Some(mut parser) = parser_fixture() else {
             return;
         };
-        let powershell = powershell.as_path().to_str().unwrap();
-        let mut parser = PowershellParserProcess::spawn(powershell).unwrap();
 
         let parsed = parser
             .parse("git log --% HEAD --output=codex_poc.txt")
@@ -315,11 +322,9 @@ mod tests {
 
     #[test]
     fn parser_process_rejects_param_blocks() {
-        let Some(powershell) = try_find_powershell_executable_blocking() else {
+        let Some(mut parser) = parser_fixture() else {
             return;
         };
-        let powershell = powershell.as_path().to_str().unwrap();
-        let mut parser = PowershellParserProcess::spawn(powershell).unwrap();
 
         let parsed = parser
             .parse("param([string]$path = (Get-Location)) Write-Output test")
@@ -329,11 +334,9 @@ mod tests {
 
     #[test]
     fn parser_process_rejects_named_blocks() {
-        let Some(powershell) = try_find_powershell_executable_blocking() else {
+        let Some(mut parser) = parser_fixture() else {
             return;
         };
-        let powershell = powershell.as_path().to_str().unwrap();
-        let mut parser = PowershellParserProcess::spawn(powershell).unwrap();
 
         let parsed = parser
             .parse("begin { Set-Content codex_poc.txt pwned } end { Get-Content Cargo.toml }")
@@ -352,12 +355,9 @@ mod tests {
 
     #[test]
     fn parser_process_rejects_using_statements() {
-        let Some(powershell) = try_find_powershell_executable_blocking() else {
+        let Some(mut parser) = parser_fixture() else {
             return;
         };
-        let powershell = powershell.as_path().to_str().unwrap();
-        trace_parser_fixture("using_statements", "spawning");
-        let mut parser = PowershellParserProcess::spawn(powershell).unwrap();
         trace_parser_fixture("using_statements", "waiting for response");
 
         let parsed = parser
@@ -371,12 +371,9 @@ mod tests {
 
     #[test]
     fn parser_process_rejects_trap_blocks() {
-        let Some(powershell) = try_find_powershell_executable_blocking() else {
+        let Some(mut parser) = parser_fixture() else {
             return;
         };
-        let powershell = powershell.as_path().to_str().unwrap();
-        trace_parser_fixture("trap_blocks", "spawning");
-        let mut parser = PowershellParserProcess::spawn(powershell).unwrap();
         trace_parser_fixture("trap_blocks", "waiting for response");
 
         let parsed = parser

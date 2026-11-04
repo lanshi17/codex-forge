@@ -466,6 +466,34 @@ async fn conpty_delivers_input_to_foreground_children() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn conpty_ctrl_c_interrupts_powershell_foreground_child() -> anyhow::Result<()> {
+    // The ignored-Ctrl-C flag is inherited across CreateProcess, including
+    // pseudoconsole clients. Isolate this test from the runner's signal policy
+    // without changing the process-wide policy of concurrent callers/tests.
+    if std::env::var_os("CODEX_PTY_CTRL_C_PROBE").is_none() {
+        let output = std::process::Command::new(std::env::current_exe()?)
+            .args([
+                "--exact",
+                "tests::windows_tests::conpty_ctrl_c_interrupts_powershell_foreground_child",
+                "--nocapture",
+            ])
+            .env("CODEX_PTY_CTRL_C_PROBE", "1")
+            .creation_flags(winapi::um::winbase::CREATE_NEW_CONSOLE)
+            .output()?;
+        anyhow::ensure!(
+            output.status.success(),
+            "isolated Ctrl-C probe failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return Ok(());
+    }
+    let reset = unsafe { winapi::um::consoleapi::SetConsoleCtrlHandler(None, 0) };
+    anyhow::ensure!(
+        reset != 0,
+        "reset Ctrl-C policy: {}",
+        std::io::Error::last_os_error()
+    );
+
     let Some(program) = find_powershell() else {
         return Ok(());
     };
@@ -489,7 +517,14 @@ async fn conpty_ctrl_c_interrupts_powershell_foreground_child() -> anyhow::Resul
     wait_for_output_contains(&mut output_rx, "TTL=", /*timeout_ms*/ 10_000).await?;
 
     writer.send(vec![0x03]).await?;
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    // Observe ping's signal handler completing before queuing the recovery
+    // command; a fixed sleep cannot establish that PowerShell has resumed.
+    wait_for_output_contains(
+        &mut output_rx,
+        "Ping statistics",
+        /*timeout_ms*/ 10_000,
+    )
+    .await?;
     writer.send(b"cmd.exe /D /C ver\n".to_vec()).await?;
     let mut output = wait_for_output_contains(
         &mut output_rx,
