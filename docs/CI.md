@@ -43,3 +43,7 @@ GitHub annotations 已确认该轮 SDK、Linux 发布构建及 macOS 测试再�
 候选 da6e97e1d5a84b2c3c0e384608d5ea01196f4e6b 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41832924693)已通过 Windows 测试分片 1/4、2/4、argument-comment lint、Clippy 和发布构建，确认修复越过实际编译及链接。分片 3/4、4/4 仍有失败：Git 子进程就绪超时、PowerShell parser 挂起及 ConPTY Ctrl-C 用例失败；TUI 重试日志另有动画帧快照差异和工作树转换超时。后续本地 Windows 回退恢复原跨平台配置的单线程测试限制，并限制同时运行的测试目标，不引入该配置的跳过列表。两个已挂起的 PowerShell parser 用例增加直接 stderr 阶段记录，若问题持续可区分启动、响应及子进程回收；仍要求解析结果为 `Unsupported`。Git 进程树夹具改为在各平台重新执行同一个 Rust 测试程序，去除 PowerShell 启动及控制台继承这一额外变量，保留就绪期限及后代存活断言。ConPTY 用例改为等待实际 ping 回复而非启动横幅中的地址；TUI 快照沿用状态效果测试的未来计时原点，在测试中固定首帧，保留原有符号、快照与布局断言。本地 Git 定向测试 3 项及最终 TUI 定向快照均通过；额外正向对照确认不执行进程组清理时，子进程会在包装进程退出后继续运行并写出失败标记，说明存活检查仍能捕获泄漏。这些修改仍需远端验收。
 
 该轮 Blob policy 在 checkout 前因 Fence 受保护程序执行权限错误失败；失败运行器为 AWS Ubuntu 镜像 `20261018.96.1`，上一轮通过的运行器为 Azure 镜像 `20261101.360.1`。目前未确定根因，不能把平台差异当作已验证修复。保留 Fence 的固定版本及失败门禁，增加失败后的只读挂载和权限诊断；需要重跑验证启动、策略检查与 post-job 证据全部通过。整轮 CI 仍不合格。
+
+候选 19cd6c10216d2c00e05e056c7f864b5bf90df8cb 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41856853135)中，Fence、Superagent Forge、repo-checks、格式及拼写已通过，但 BTAE-Eval 证据封存用例返回 `TimedOut`，未达到预期 `Completed`。该用例在启动 Worker 前同步写入启动日志，原一秒预算包含此 I/O；后续仅为这个封存/脱敏夹具设置十秒预算，保留完成状态、摘要、脱敏与目录冲突断言，80 毫秒超时用例不变。本地数据盘全套运行出现其他短预算 I/O 超时；在独立 tmpfs 测试目录中完整 86 项及 Clippy、格式检查通过。完整 CI 仍待新候选验收。
+
+后续 Windows 分片 4 先运行 Git、PowerShell 和 PTY 三个进程相关单元测试目标，再执行原完整分片；两次调用复用相同参数与本机测试缓存，完整目标清单和汇总门禁保持原样。这样可在编译完整 Agent/TUI 前暴露运行期失败，减少下一轮定位的等待。

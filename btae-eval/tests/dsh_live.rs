@@ -111,6 +111,9 @@ fn stderr_output_limit_is_bounded() {
 fn evidence_directory_is_created_once_and_sealed_without_payloads() {
     let dir = std::env::temp_dir().join(format!("btae-live-evidence-{}", std::process::id()));
     let mut req = request("success");
+    // The started journal is fsynced inside the wall budget before spawning.
+    // This checks sealing and payload redaction, not shared-runner fsync latency.
+    req.limits.wall_ms = 10_000;
     req.output = Some(dir.clone());
     let marker = "LIVE_PAYLOAD_CANARY_20261103";
     req.prompt = marker.as_bytes().to_vec();

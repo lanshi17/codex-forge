@@ -245,11 +245,26 @@ jobs:
             --build_metadata=TAG_windows_test_shard=${BAZEL_TEST_SHARD}
           )
 
+          bazel_wrapper_args=(
+            --print-failed-action-summary
+            --print-failed-test-logs
+            --windows-cross-compile
+            --remote-download-toplevel
+          )
+          if [[ "${BAZEL_TEST_SHARD}" == "4" ]]; then
+            # Surface process and console failures before compiling the full
+            # agent runtime and UI. The complete shard still runs below and
+            # reuses successful preflight test results from the same cache.
+            ./.github/scripts/run-bazel-ci.sh \
+              "${bazel_wrapper_args[@]}" \
+              -- "${bazel_test_args[@]}" -- \
+              //codex-rs/git-utils:git-utils-unit-tests \
+              //codex-rs/shell-command:shell-command-unit-tests \
+              //codex-rs/utils/pty:pty-unit-tests
+          fi
+
           ./.github/scripts/run-bazel-ci.sh \
-            --print-failed-action-summary \
-            --print-failed-test-logs \
-            --windows-cross-compile \
-            --remote-download-toplevel \
+            "${bazel_wrapper_args[@]}" \
             -- \
             "${bazel_test_args[@]}" \
             -- \
