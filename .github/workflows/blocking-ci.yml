@@ -30,6 +30,10 @@ jobs:
     uses: ./.github/workflows/codespell.yml
     secrets: inherit
 
+  forge-ci:
+    name: Independent Rust workspaces
+    uses: ./.github/workflows/forge-ci.yml
+
   repo-checks:
     name: repo-checks
     uses: ./.github/workflows/repo-checks.yml
@@ -55,6 +59,7 @@ jobs:
       - blob-size-policy
       - cargo-deny
       - codespell
+      - forge-ci
       - repo-checks
       - rust-ci
       - sdk

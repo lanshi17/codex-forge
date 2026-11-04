@@ -1,5 +1,6 @@
 use serde_json::Value;
-use std::{path::Path, process::Command};
+use std::path::Path;
+use std::process::Command;
 
 fn binary() -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_btae-eval"));

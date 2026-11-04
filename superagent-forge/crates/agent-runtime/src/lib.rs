@@ -1,5 +1,6 @@
 //! Lifecycle port; a process supervisor and OS isolation must precede execution support.
-use forge_agent_backend::{AgentExecutor, BackendFuture};
+use forge_agent_backend::AgentExecutor;
+use forge_agent_backend::BackendFuture;
 use forge_domain::AgentSession;
 
 pub trait AgentRuntime: Send + Sync {

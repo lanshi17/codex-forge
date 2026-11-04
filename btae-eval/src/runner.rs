@@ -1,23 +1,36 @@
 //! Linux-only, no credentials or model calls. This protocol is not a DSH adapter.
-use crate::{Manifest, PlannedRun, digest, plan};
+use crate::Manifest;
+use crate::PlannedRun;
+use crate::digest;
+use crate::plan;
 use clap::ValueEnum;
-use nix::{
-    sys::signal::{Signal, killpg},
-    unistd::Pid,
-};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    error::Error,
-    fs::{self, File, OpenOptions},
-    io::{self, Read, Write},
-    os::unix::{fs::PermissionsExt, process::CommandExt},
-    path::{Component, Path, PathBuf},
-    process::{Child, Command, ExitStatus, Stdio},
-    sync::mpsc,
-    thread,
-    time::{Duration, Instant},
-};
+use nix::sys::signal::Signal;
+use nix::sys::signal::killpg;
+use nix::unistd::Pid;
+use serde::Deserialize;
+use serde::Serialize;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::error::Error;
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::fs::{self};
+use std::io::Read;
+use std::io::Write;
+use std::io::{self};
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::process::CommandExt;
+use std::path::Component;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Child;
+use std::process::Command;
+use std::process::ExitStatus;
+use std::process::Stdio;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+use std::time::Instant;
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 

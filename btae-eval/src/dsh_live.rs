@@ -1,29 +1,36 @@
 //! Linux process supervision for DSH JSONL. OS isolation is caller supplied.
 //! No raw transcript, stderr, prompt or credential values are serialized.
-use crate::dsh::{DshAdapter, DshLimits, DshSummary};
-use nix::{
-    fcntl::{FcntlArg, OFlag, fcntl},
-    sys::signal::{Signal, killpg},
-    unistd::Pid,
-};
+use crate::dsh::DshAdapter;
+use crate::dsh::DshLimits;
+use crate::dsh::DshSummary;
+use nix::fcntl::FcntlArg;
+use nix::fcntl::OFlag;
+use nix::fcntl::fcntl;
+use nix::sys::signal::Signal;
+use nix::sys::signal::killpg;
+use nix::unistd::Pid;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
-use std::{
-    collections::BTreeMap,
-    fs::{self, OpenOptions},
-    io::{self, Read, Write},
-    os::{
-        fd::AsRawFd,
-        unix::{
-            fs::{DirBuilderExt, OpenOptionsExt},
-            process::CommandExt,
-        },
-    },
-    path::{Path, PathBuf},
-    process::{Child, Command, ExitStatus, Stdio},
-    thread,
-    time::{Duration, Instant},
-};
+use sha2::Digest;
+use sha2::Sha256;
+use std::collections::BTreeMap;
+use std::fs::OpenOptions;
+use std::fs::{self};
+use std::io::Read;
+use std::io::Write;
+use std::io::{self};
+use std::os::fd::AsRawFd;
+use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::process::CommandExt;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Child;
+use std::process::Command;
+use std::process::ExitStatus;
+use std::process::Stdio;
+use std::thread;
+use std::time::Duration;
+use std::time::Instant;
 use thiserror::Error;
 
 pub const MAX_PROMPT_BYTES: usize = 64 * 1024;

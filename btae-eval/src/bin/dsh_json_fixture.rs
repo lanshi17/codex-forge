@@ -1,11 +1,11 @@
 //! Synthetic JSONL producer for the live process supervisor tests.
 use clap::Parser;
-use std::{
-    io::{self, Read, Write},
-    process::ExitCode,
-    thread,
-    time::Duration,
-};
+use std::io::Read;
+use std::io::Write;
+use std::io::{self};
+use std::process::ExitCode;
+use std::thread;
+use std::time::Duration;
 #[derive(Parser)]
 struct Args {
     #[arg(long)]

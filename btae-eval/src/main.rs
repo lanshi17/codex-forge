@@ -1,13 +1,17 @@
-use btae_eval::{Budget, ClusterPair, Manifest, Observation};
-use clap::{Parser, Subcommand};
-use serde::{Deserialize, de::DeserializeOwned};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    error::Error,
-    io::Read,
-    path::PathBuf,
-    process::ExitCode,
-};
+use btae_eval::Budget;
+use btae_eval::ClusterPair;
+use btae_eval::Manifest;
+use btae_eval::Observation;
+use clap::Parser;
+use clap::Subcommand;
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::error::Error;
+use std::io::Read;
+use std::path::PathBuf;
+use std::process::ExitCode;
 
 #[derive(Parser)]
 #[command(

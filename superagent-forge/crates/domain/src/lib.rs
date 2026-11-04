@@ -1,6 +1,8 @@
 //! Framework-independent domain model. Worker completion never grants merge authority.
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, path::PathBuf};
+use serde::Deserialize;
+use serde::Serialize;
+use std::collections::BTreeSet;
+use std::path::PathBuf;
 use thiserror::Error;
 use uuid::Uuid;
 

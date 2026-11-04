@@ -1,5 +1,8 @@
-use clap::{Parser, Subcommand};
-use std::{error::Error, path::PathBuf, process::ExitCode};
+use clap::Parser;
+use clap::Subcommand;
+use std::error::Error;
+use std::path::PathBuf;
+use std::process::ExitCode;
 
 #[derive(Parser)]
 #[command(

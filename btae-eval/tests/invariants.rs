@@ -1,5 +1,6 @@
 use btae_eval::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 fn manifest() -> Manifest {
     serde_json::from_str(include_str!("../datasets/pilot.json")).unwrap()

@@ -58,8 +58,11 @@ def rust_formatter_group(*, check: bool) -> FormatterGroup:
     rust_files = sorted(
         os.path.relpath(REPO_ROOT / os.fsdecode(encoded_path), rust_workspace)
         for encoded_path in repository_files
-        if encoded_path and (REPO_ROOT / os.fsdecode(encoded_path)).is_file()
+        if encoded_path
+        and not os.fsdecode(encoded_path).startswith("audit/")
+        and (REPO_ROOT / os.fsdecode(encoded_path)).is_file()
     )
+    # audit/ contains source-hashed historical evidence, not maintained code.
     # Git supplies every source file, including files Cargo cannot discover.
     # Do not recursively format child modules again or include ignored files.
     args = [
@@ -152,7 +155,11 @@ def python_scripts_formatter_group(*, check: bool) -> FormatterGroup:
     args = ["uv", "run", "--frozen", "--project", "scripts", "ruff", "format"]
     if check:
         args.append("--check")
-    args.append(".")
+    # Preserve source-hashed audit evidence and frozen benchmark seeds. The
+    # latter are checked against datasets/*-snapshot.json by the Rust suite.
+    args.extend(
+        [".", "--config", 'extend-exclude = ["audit", "btae-eval/repositories"]']
+    )
     return FormatterGroup("Python scripts", (Command(tuple(args)),))
 
 

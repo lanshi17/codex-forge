@@ -1,6 +1,7 @@
 use forge_application::*;
 use forge_domain::*;
-use forge_review::{CheckResult, ReviewEvidence};
+use forge_review::CheckResult;
+use forge_review::ReviewEvidence;
 use std::collections::BTreeSet;
 
 fn principal(name: &str) -> PrincipalId {

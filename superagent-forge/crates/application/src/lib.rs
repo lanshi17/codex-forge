@@ -1,6 +1,7 @@
 //! Trusted application boundary. Caller identities must come from host authentication.
 use forge_domain::*;
-use forge_review::{ReviewError, ReviewEvidence};
+use forge_review::ReviewError;
+use forge_review::ReviewEvidence;
 use std::collections::BTreeSet;
 use thiserror::Error;
 

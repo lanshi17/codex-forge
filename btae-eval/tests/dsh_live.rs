@@ -1,6 +1,11 @@
 #![cfg(target_os = "linux")]
 use btae_eval::dsh_live::*;
-use std::{collections::BTreeMap, fs, path::PathBuf, sync::mpsc, thread, time::Duration};
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 fn exe() -> PathBuf {
     env!("CARGO_BIN_EXE_dsh-json-fixture").into()
 }
@@ -183,7 +188,8 @@ fn spawn_failure_leaves_a_sealed_failure_record() {
 
 #[test]
 fn cli_collect_has_success_and_failure_exit_codes_without_claiming_observation() {
-    use std::process::{Command, Stdio};
+    use std::process::Command;
+    use std::process::Stdio;
     for (scenario, expected) in [("success", 0), ("incomplete", 1), ("malformed", 1)] {
         let child = Command::new(env!("CARGO_BIN_EXE_btae-eval"))
             .args(["collect", "--executable"])
