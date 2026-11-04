@@ -40,6 +40,10 @@ pub(super) fn truncated_path_variants(path: &str) -> Vec<String> {
         .collect()
 }
 
+pub(crate) fn freeze_status_timer(chat: &mut ChatWidget) {
+    chat.bottom_pane.freeze_status_timer();
+}
+
 pub(crate) fn normalize_snapshot_paths(text: impl Into<String>) -> String {
     let mut text = text.into();
 

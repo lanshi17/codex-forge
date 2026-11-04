@@ -337,6 +337,9 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
             for args in calls:
                 self.assertIn("--platforms=//:windows_x86_64_gnullvm", args)
                 self.assertIn("--host_platform=//:local_windows", args)
+            self.assertIn("--local_test_jobs=1", calls[0])
+            self.assertIn("--test_env=RUST_TEST_THREADS=1", calls[0])
+            self.assertFalse(any("SKIP_FILTERS" in arg for arg in calls[0]))
 
     @unittest.skipUnless(os.name == "posix", "exercises the Bash CI helper on Unix")
     def test_windows_voice_inputs_are_fixed_and_do_not_reach_linux_rbe(self) -> None:

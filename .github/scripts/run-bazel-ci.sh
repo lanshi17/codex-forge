@@ -308,6 +308,10 @@ if [[ "${RUNNER_OS:-}" == "Windows" && $windows_cross_compile -eq 1 && -z "${BUI
     --extra_execution_platforms=//:windows_x86_64_gnullvm
     --extra_toolchains=//:windows_gnullvm_tests_on_gnullvm_host_toolchain
     --jobs=8
+    # Keep process fixtures from competing with each other and the cold build.
+    # Restore the cross configuration's per-binary limit without its skip list.
+    --local_test_jobs=1
+    --test_env=RUST_TEST_THREADS=1
   )
 fi
 

@@ -725,6 +725,12 @@ impl BottomPane {
         self.status_timer.reset(elapsed);
     }
 
+    #[cfg(test)]
+    pub(crate) fn freeze_status_timer(&mut self) {
+        // Freeze the clock and initial animation frame without hiding the status glyph.
+        self.status_timer.freeze_at_start();
+    }
+
     pub(crate) fn set_status_timer_origin(&mut self, started_at: Option<Instant>) {
         self.status_timer.display_started_at = started_at;
         self.request_redraw();

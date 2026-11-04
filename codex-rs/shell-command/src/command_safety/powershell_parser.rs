@@ -341,18 +341,32 @@ mod tests {
         assert_eq!(parsed, PowershellParseOutcome::Unsupported);
     }
 
+    // Write directly to stderr so libtest's capture cannot hide the last
+    // completed phase when a Windows runner terminates a hung test target.
+    fn trace_parser_fixture(name: &str, phase: &str) {
+        let _ = writeln!(
+            std::io::stderr(),
+            "PowerShell parser fixture {name}: {phase}"
+        );
+    }
+
     #[test]
     fn parser_process_rejects_using_statements() {
         let Some(powershell) = try_find_powershell_executable_blocking() else {
             return;
         };
         let powershell = powershell.as_path().to_str().unwrap();
+        trace_parser_fixture("using_statements", "spawning");
         let mut parser = PowershellParserProcess::spawn(powershell).unwrap();
+        trace_parser_fixture("using_statements", "waiting for response");
 
         let parsed = parser
             .parse("using module ./codex_poc.psm1\nGet-Content Cargo.toml")
             .unwrap();
+        trace_parser_fixture("using_statements", "response received");
         assert_eq!(parsed, PowershellParseOutcome::Unsupported);
+        drop(parser);
+        trace_parser_fixture("using_statements", "child reaped");
     }
 
     #[test]
@@ -361,13 +375,18 @@ mod tests {
             return;
         };
         let powershell = powershell.as_path().to_str().unwrap();
+        trace_parser_fixture("trap_blocks", "spawning");
         let mut parser = PowershellParserProcess::spawn(powershell).unwrap();
+        trace_parser_fixture("trap_blocks", "waiting for response");
 
         let parsed = parser
             .parse(
                 "trap { Set-Content codex_poc.txt pwned; continue } Get-Content missing -ErrorAction Stop",
             )
             .unwrap();
+        trace_parser_fixture("trap_blocks", "response received");
         assert_eq!(parsed, PowershellParseOutcome::Unsupported);
+        drop(parser);
+        trace_parser_fixture("trap_blocks", "child reaped");
     }
 }
