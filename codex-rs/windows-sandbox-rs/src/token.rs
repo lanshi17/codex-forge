@@ -19,6 +19,7 @@ use windows_sys::Win32::Security::Authorization::TRUSTEE_IS_UNKNOWN;
 use windows_sys::Win32::Security::Authorization::TRUSTEE_W;
 use windows_sys::Win32::Security::CopySid;
 use windows_sys::Win32::Security::CreateRestrictedToken;
+#[cfg(test)]
 use windows_sys::Win32::Security::CreateWellKnownSid;
 use windows_sys::Win32::Security::GetTokenInformation;
 use windows_sys::Win32::Security::IsValidSid;
@@ -43,6 +44,7 @@ const DISABLE_MAX_PRIVILEGE: u32 = 0x01;
 const LUA_TOKEN: u32 = 0x04;
 const WRITE_RESTRICTED: u32 = 0x08;
 const GENERIC_ALL: u32 = 0x1000_0000;
+#[cfg(test)]
 const WIN_WORLD_SID: i32 = 1;
 const SE_GROUP_LOGON_ID: u32 = 0xC0000000;
 
@@ -111,6 +113,7 @@ unsafe fn set_default_dacl(h_token: HANDLE, logon_sid: *mut c_void) -> Result<()
     Ok(())
 }
 
+#[cfg(test)]
 pub unsafe fn world_sid() -> Result<Vec<u8>> {
     let mut size: u32 = 0;
     CreateWellKnownSid(
@@ -475,12 +478,14 @@ unsafe fn create_token_with_caps_from(
     }
     let mut logon_sid_bytes = get_logon_sid_bytes(base_token)?;
     let psid_logon = logon_sid_bytes.as_mut_ptr() as *mut c_void;
-    let mut everyone = world_sid()?;
-    let psid_everyone = everyone.as_mut_ptr() as *mut c_void;
 
-    // Exact order: Capabilities..., ExtraRestricting..., Logon, Everyone
+    // Restrict writes to capabilities, explicit additional identities and the
+    // logon. Everyone must not satisfy the restricting pass: world-writable
+    // host ACLs would otherwise grant writes outside the selected roots.
+    // WRITE_RESTRICTED leaves ordinary read access unchanged.
+    // Exact order: Capabilities..., ExtraRestricting..., Logon
     let mut entries: Vec<SID_AND_ATTRIBUTES> =
-        vec![std::mem::zeroed(); psid_capabilities.len() + extra_restricting_sids.len() + 2];
+        vec![std::mem::zeroed(); psid_capabilities.len() + extra_restricting_sids.len() + 1];
     for (i, psid) in psid_capabilities.iter().enumerate() {
         entries[i].Sid = *psid;
         entries[i].Attributes = 0;
@@ -493,8 +498,6 @@ unsafe fn create_token_with_caps_from(
     let logon_idx = extras_idx + extra_restricting_sids.len();
     entries[logon_idx].Sid = psid_logon;
     entries[logon_idx].Attributes = 0;
-    entries[logon_idx + 1].Sid = psid_everyone;
-    entries[logon_idx + 1].Attributes = 0;
 
     let mut new_token: HANDLE = std::ptr::null_mut();
     let flags = DISABLE_MAX_PRIVILEGE | LUA_TOKEN | WRITE_RESTRICTED;

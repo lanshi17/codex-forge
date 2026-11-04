@@ -46,6 +46,42 @@ unsafe fn token_has_restricting_sid(token: HANDLE, expected_sid: *mut c_void) ->
 }
 
 #[test]
+fn legacy_tokens_do_not_accept_everyone_as_a_write_restriction() -> Result<()> {
+    use std::os::windows::io::AsRawHandle;
+    use std::os::windows::io::FromRawHandle;
+    use std::os::windows::io::OwnedHandle;
+
+    let capability = LocalSid::from_string("S-1-5-21-10-20-30-40")?;
+    unsafe {
+        let base = OwnedHandle::from_raw_handle(get_current_token_for_restriction()?);
+        let mut everyone = world_sid()?;
+        let mut logon = get_logon_sid_bytes(base.as_raw_handle())?;
+        for create_token in [
+            create_workspace_write_token_with_caps_from,
+            create_readonly_token_with_caps_from,
+        ] {
+            let token = OwnedHandle::from_raw_handle(create_token(
+                base.as_raw_handle(),
+                &[capability.as_ptr()],
+            )?);
+            assert!(token_has_restricting_sid(
+                token.as_raw_handle(),
+                capability.as_ptr()
+            )?);
+            assert!(token_has_restricting_sid(
+                token.as_raw_handle(),
+                logon.as_mut_ptr().cast()
+            )?);
+            assert!(!token_has_restricting_sid(
+                token.as_raw_handle(),
+                everyone.as_mut_ptr().cast()
+            )?);
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn elevated_token_includes_network_proxy_restricting_sid() -> Result<()> {
     let capability_sid = LocalSid::from_string("S-1-5-21-10-20-30-40")?;
     let network_proxy_sid = LocalSid::from_string("S-1-5-21-50-60-70-80")?;

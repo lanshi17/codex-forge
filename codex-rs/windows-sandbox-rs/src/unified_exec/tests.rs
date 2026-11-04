@@ -740,6 +740,35 @@ fn legacy_workspace_write_delete_is_limited_to_writable_roots() {
     runtime.block_on(async move {
         // Keep writable roots out of USERPROFILE exclusions such as AppData.
         let test_root = TempDir::new_in(sandbox_cwd()).expect("create legacy delete test root");
+        // Exercise public write grants explicitly rather than inheriting the
+        // runner volume's ACL. They must not replace a write-root capability.
+        unsafe {
+            use windows_sys::Win32::Foundation::HLOCAL;
+            use windows_sys::Win32::Foundation::LocalFree;
+            use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
+            use windows_sys::Win32::Security::Authorization::SDDL_REVISION_1;
+            use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
+            use windows_sys::Win32::Security::PROTECTED_DACL_SECURITY_INFORMATION;
+            use windows_sys::Win32::Security::SetFileSecurityW;
+
+            let mut descriptor = std::ptr::null_mut();
+            assert_ne!(
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    crate::winutil::to_wide("D:P(A;OICI;FA;;;WD)").as_ptr(),
+                    SDDL_REVISION_1,
+                    &mut descriptor,
+                    std::ptr::null_mut(),
+                ),
+                0,
+            );
+            let set = SetFileSecurityW(
+                crate::winutil::to_wide(test_root.path()).as_ptr(),
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                descriptor,
+            );
+            LocalFree(descriptor as HLOCAL);
+            assert_ne!(set, 0, "install the world-writable fixture ACL");
+        }
         let codex_home = sandbox_home("legacy-delete-writable-roots");
         let workspace = test_root.path().join("workspace");
         let temp_root = test_root.path().join("temp");

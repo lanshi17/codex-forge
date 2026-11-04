@@ -46,4 +46,6 @@ GitHub annotations 已确认该轮 SDK、Linux 发布构建及 macOS 测试再�
 
 候选 19cd6c10216d2c00e05e056c7f864b5bf90df8cb 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41856853135)中，Fence、Superagent Forge、repo-checks、格式及拼写已通过，但 BTAE-Eval 证据封存用例返回 `TimedOut`，未达到预期 `Completed`。该用例在启动 Worker 前同步写入启动日志，原一秒预算包含此 I/O；后续仅为这个封存/脱敏夹具设置十秒预算，保留完成状态、摘要、脱敏与目录冲突断言，80 毫秒超时用例不变。本地数据盘全套运行出现其他短预算 I/O 超时；在独立 tmpfs 测试目录中完整 86 项及 Clippy、格式检查通过。完整 CI 仍待新候选验收。
 
-后续 Windows 分片 4 先运行 Git、PowerShell 和 PTY 三个进程相关单元测试目标，再执行原完整分片；两次调用复用相同参数与本机测试缓存，完整目标清单和汇总门禁保持原样。这样可在编译完整 Agent/TUI 前暴露运行期失败，减少下一轮定位的等待。
+该候选的 Windows 分片 1、2、Clippy 和发布构建已通过，Git 进程树目标也已实际通过。分片 3 的沙箱回归发现公共可写目录中的工作区外文件和 `.git` 被删除；不能通过收紧测试目录权限规避这一失败。令牌实现将 Everyone 放入写入限制 SID 集合，使公共 ACL 可能满足限制检查。后续移除这一身份，保留能力、显式附加身份和 logon SID，并新增令牌 SID 回归；原删除回归显式安装公共可写 ACL，仍要求工作区/TEMP/TMP 可删除、外部文件和 `.git` 保持完整。隔离的 Windows 目标交叉编译和 Clippy 已覆盖令牌模块、测试及新增 ACL 片段，但尚未在 Windows 实际运行，不能据此宣布权限修复通过验收。
+
+后续 Windows 分片 4 先运行 Git、PowerShell、PTY 和 Windows 沙箱四个单元测试目标，再执行原完整分片；两次调用复用相同参数与本机测试缓存，完整目标清单和汇总门禁保持原样。这样可在编译完整 Agent/TUI 前暴露运行期失败，减少下一轮定位的等待。

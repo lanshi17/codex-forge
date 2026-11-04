@@ -252,7 +252,7 @@ jobs:
             --remote-download-toplevel
           )
           if [[ "${BAZEL_TEST_SHARD}" == "4" ]]; then
-            # Surface process and console failures before compiling the full
+            # Surface process, console and sandbox failures before compiling the full
             # agent runtime and UI. The complete shard still runs below and
             # reuses successful preflight test results from the same cache.
             ./.github/scripts/run-bazel-ci.sh \
@@ -260,7 +260,8 @@ jobs:
               -- "${bazel_test_args[@]}" -- \
               //codex-rs/git-utils:git-utils-unit-tests \
               //codex-rs/shell-command:shell-command-unit-tests \
-              //codex-rs/utils/pty:pty-unit-tests
+              //codex-rs/utils/pty:pty-unit-tests \
+              //codex-rs/windows-sandbox-rs:windows-sandbox-rs-unit-tests
           fi
 
           ./.github/scripts/run-bazel-ci.sh \
