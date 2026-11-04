@@ -50,6 +50,14 @@ the acknowledgement only on Windows. An absent or different value leaves the
 existing license check closed; Linux and macOS receive no acknowledgement.
 No workflow accepts those terms automatically.
 
+Hosted Windows Bazel and argument-comment lint jobs opt into pinned voice tool
+provisioning through `windows-voice-tools`. The existing offline installer
+verifies Cygwin packages and pkgconf; archives come from the hash-pinned public
+`openai/codex` release. Local Windows builds receive the declared tool repository
+and fixed `SystemRoot` and host architecture values. Windows paths are not passed
+to Linux remote build actions. Tool installations stay in the runner's temporary
+directory and are not added to release packages.
+
 ## Pull Requests
 
 - Required checks run against GitHub's synthetic merge commit, not the pull

@@ -61,6 +61,7 @@ jobs:
         uses: ./.github/actions/prepare-bazel-ci
         with:
           msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
+          windows-voice-tools: "true"
           target: ${{ matrix.target }}
           cache-scope: bazel-${{ github.job }}
 
@@ -178,6 +179,7 @@ jobs:
         uses: ./.github/actions/prepare-bazel-ci
         with:
           msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
+          windows-voice-tools: "true"
           target: x86_64-pc-windows-gnullvm
           # Reuse the former monolithic Windows test cache for restores. Do
           # not save it from every shard below; duplicate uploads would sit on
@@ -279,6 +281,7 @@ jobs:
         uses: ./.github/actions/prepare-bazel-ci
         with:
           msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
+          windows-voice-tools: "true"
           target: x86_64-pc-windows-msvc
           cache-scope: bazel-${{ github.job }}
 
@@ -371,6 +374,7 @@ jobs:
         uses: ./.github/actions/prepare-bazel-ci
         with:
           msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
+          windows-voice-tools: "true"
           target: ${{ matrix.target }}
           cache-scope: bazel-${{ github.job }}
 
@@ -477,6 +481,7 @@ jobs:
         uses: ./.github/actions/prepare-bazel-ci
         with:
           msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
+          windows-voice-tools: "true"
           target: ${{ matrix.target }}
           cache-scope: bazel-${{ github.job }}
 

@@ -11,3 +11,4 @@
 [2026-11-04] Replace repository-specific private runner groups and labels across CI/postmerge/release with same-platform hosted runners; preserve targets, shards and strict merge gate; remote validation pending [in-progress]
 [2026-11-04] Hosted Windows and SDK startup confirmed on 3d8c4e63c; migrate paid macOS ARM64 runners to standard images and forward only explicitly opted-in Windows MSVC license acknowledgement; complete CI still pending [in-progress]
 [2026-11-04] Owner explicitly accepted MSVC terms and enabled repository acknowledgement; pass it through workflow inputs, preserve fail-closed Windows setup, and cover setup-stage deadline exhaustion without retrying; complete remote CI pending [in-progress]
+[2026-11-04] Remote e877f37a8 confirms Windows MSVC acknowledgement succeeds; provision missing pinned voice tools and fixed native environment on hosted CI, and restrict the collector's 80ms deadline to its timeout fixture; full CI pending [in-progress]

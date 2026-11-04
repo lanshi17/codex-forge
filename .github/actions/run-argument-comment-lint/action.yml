@@ -22,6 +22,7 @@ runs:
         target: ${{ inputs.target }}
         cache-scope: bazel-argument-comment-lint
         msvc-runtime-eula: ${{ inputs.msvc-runtime-eula }}
+        windows-voice-tools: "true"
 
     - name: Install Linux sandbox build dependencies
       if: ${{ runner.os == 'Linux' }}

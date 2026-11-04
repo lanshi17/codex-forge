@@ -107,9 +107,25 @@ fn failure_timeout_cancel_and_bad_protocol_are_sealed() {
         let t = Temp::new();
         let mut req = request(&t);
         req.args[1] = scenario.into();
-        req.limits.wall_ms = 80;
+        // Only the hanging fixture needs a short deadline. Failure/protocol
+        // cases must have time to emit their result on a loaded CI host.
+        if scenario == "timeout" {
+            req.limits.wall_ms = 80;
+        }
         let r = collect_task(req).unwrap();
         assert_eq!(r.outcome, expected);
+        let process: serde_json::Value =
+            serde_json::from_slice(&fs::read(t.0.join("run/process/record.json")).unwrap())
+                .unwrap();
+        assert_eq!(process["streams_closed"], true);
+        if scenario == "failure" {
+            assert_eq!(process["exit_code"], 7);
+        } else {
+            assert!(
+                process["exit_code"].is_null(),
+                "hanging worker must be killed"
+            );
+        }
         verify_task(&t.0.join("run"), &manifest()).unwrap();
     }
     let t = Temp::new();

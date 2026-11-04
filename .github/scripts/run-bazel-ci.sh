@@ -333,6 +333,21 @@ if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
   fi
 
   if [[ $pass_windows_build_env -eq 1 ]]; then
+    # Native voice rules inspect these during analysis, so inherited values
+    # (--action_env=NAME) are insufficient. Supply fixed, provisioned inputs.
+    if [[ -n "${VOICE_WINDOWS_BAZEL_REPOSITORY:-}" ]]; then
+      : "${VOICE_WINDOWS_SYSTEM_ROOT:?Windows voice SystemRoot is required}"
+      : "${VOICE_WINDOWS_HOST_ARCH:?Windows voice host architecture is required}"
+      post_config_bazel_args+=(
+        "--inject_repository=voice_windows_tools=${VOICE_WINDOWS_BAZEL_REPOSITORY}"
+        "--//third_party/voice:windows_installed_tools=@voice_windows_tools//:tools"
+        "--action_env=SystemRoot=${VOICE_WINDOWS_SYSTEM_ROOT}"
+        "--host_action_env=SystemRoot=${VOICE_WINDOWS_SYSTEM_ROOT}"
+        "--action_env=PROCESSOR_ARCHITECTURE=${VOICE_WINDOWS_HOST_ARCH}"
+        "--host_action_env=PROCESSOR_ARCHITECTURE=${VOICE_WINDOWS_HOST_ARCH}"
+        "--extra_toolchains=//third_party/voice:windows_pkg_config_toolchain,//third_party/voice:windows_cmake_toolchain"
+      )
+    fi
     windows_action_env_vars=(
       INCLUDE
       LIB

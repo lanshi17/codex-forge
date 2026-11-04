@@ -285,6 +285,66 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 37, result.stderr)
 
+    @unittest.skipUnless(os.name == "posix", "exercises the Bash CI helper on Unix")
+    def test_windows_voice_inputs_are_fixed_and_do_not_reach_linux_rbe(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            capture = Path(temp_dir) / "args.json"
+            fake_bazel = Path(temp_dir) / "fake-bazel"
+            fake_bazel.write_text(
+                f"#!{sys.executable}\n"
+                "import json, os, sys\n"
+                "from pathlib import Path\n"
+                "Path(os.environ['BAZEL_CAPTURE']).write_text(json.dumps(sys.argv[1:]))\n",
+                encoding="utf-8",
+            )
+            fake_bazel.chmod(0o755)
+            env = {
+                "PATH": os.defpath,
+                "RUNNER_OS": "Windows",
+                "CODEX_BAZEL_BIN": str(fake_bazel),
+                "BAZEL_CAPTURE": str(capture),
+                "CODEX_BAZEL_WINDOWS_PATH": r"C:\Program Files\Build Tools",
+                "VOICE_WINDOWS_BAZEL_REPOSITORY": r"D:\voice tools",
+                "VOICE_WINDOWS_SYSTEM_ROOT": r"C:\Windows",
+                "VOICE_WINDOWS_HOST_ARCH": "AMD64",
+            }
+            for cross_compile, remote in ((False, False), (True, False), (True, True)):
+                with self.subTest(cross_compile=cross_compile, remote=remote):
+                    case_env = dict(env)
+                    if remote:
+                        case_env["BUILDBUDDY_API_KEY"] = "fixture"
+                    result = subprocess.run(
+                        [
+                            "bash",
+                            str(Path(__file__).with_name("run-bazel-ci.sh")),
+                            *(["--windows-cross-compile"] if cross_compile else []),
+                            "--",
+                            "build",
+                            "--",
+                            "//third_party/voice:pkg_config",
+                        ],
+                        env=case_env,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    args = json.loads(capture.read_text())
+                    voice_args = [
+                        r"--inject_repository=voice_windows_tools=D:\voice tools",
+                        "--//third_party/voice:windows_installed_tools=@voice_windows_tools//:tools",
+                        r"--action_env=SystemRoot=C:\Windows",
+                        r"--host_action_env=SystemRoot=C:\Windows",
+                        "--action_env=PROCESSOR_ARCHITECTURE=AMD64",
+                        "--host_action_env=PROCESSOR_ARCHITECTURE=AMD64",
+                    ]
+                    for arg in voice_args:
+                        if remote:
+                            self.assertNotIn(arg, args)
+                        else:
+                            self.assertIn(arg, args)
+                            self.assertLess(args.index(arg), args.index("--"))
+
 
 if __name__ == "__main__":
     unittest.main()
