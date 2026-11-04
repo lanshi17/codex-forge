@@ -20,7 +20,7 @@ jobs:
     # signal without putting PR latency back on the critical path. When
     # Code-mode unit tests run on every Bazel target. When authenticated RBE
     # is available, the Windows-cross shards exercise the source-built V8 path.
-    timeout-minutes: 120
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -117,6 +117,32 @@ jobs:
             -- \
             "${bazel_targets[@]}"
 
+      - name: Verify rollout alternate-group preservation with host group mappings
+        if: runner.os == 'Linux'
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Linux sandbox namespaces can map only the primary group. Exercise
+          # the ownership fixture again with the runner's real supplementary
+          # groups, and require actual execution rather than a precondition skip.
+          ./.github/scripts/run-bazel-ci.sh --remote-download-toplevel -- build -- \
+            //codex-rs/rollout:rollout-unit-tests-bin
+          executable="$(./.github/scripts/run-bazel-ci.sh -- cquery --output=files -- \
+            //codex-rs/rollout:rollout-unit-tests-bin | grep -E '^(/|bazel-out/)')"
+          test -x "${executable}"
+          log="$(mktemp)"
+          trap 'rm -f "${log}"' EXIT
+          "${executable}" --exact \
+            compression::tests::worker_preserves_alternate_group_through_materialization \
+            --nocapture 2>&1 | tee "${log}"
+          if grep -q 'skipping ownership regression' "${log}"; then
+            echo '::error::Hosted ownership regression requires an alternate mapped group'
+            exit 1
+          fi
+          grep -q '^test result: ok\. 1 passed; 0 failed;' "${log}"
+
       - name: Upload Bazel execution logs
         if: always() && !cancelled()
         continue-on-error: true
@@ -144,7 +170,7 @@ jobs:
     # Split the Windows Bazel test leg across separate Windows hosts. Jobs with
     # BuildBuddy credentials use Linux RBE for build actions; test execution
     # remains on a Windows runner.
-    timeout-minutes: 120
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -342,7 +368,7 @@ jobs:
         uses: ./.github/actions/check-clean-worktree
 
   clippy:
-    timeout-minutes: 120
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -402,8 +428,8 @@ jobs:
             # Keep this aligned with the fast Windows Bazel test job: use
             # Linux RBE for clippy build actions while targeting Windows
             # gnullvm. Fork/community PRs without the BuildBuddy secret fall
-            # back inside `run-bazel-ci.sh` to local Windows execution with an
-            # MSVC host and the same gnullvm target.
+            # back inside `run-bazel-ci.sh` to local Windows execution with
+            # gnullvm host tools and the same gnullvm target.
             bazel_wrapper_args+=(--windows-cross-compile)
             bazel_target_list_args+=(--windows-cross-compile)
             if [[ -z "${BUILDBUDDY_API_KEY:-}" ]]; then
@@ -452,7 +478,7 @@ jobs:
         uses: ./.github/actions/check-clean-worktree
 
   verify-release-build:
-    timeout-minutes: 120
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -508,8 +534,8 @@ jobs:
             # This is build-only signal, so use the same Linux-RBE
             # cross-compile path as the fast Windows test and clippy jobs.
             # Fork/community PRs without the BuildBuddy secret fall back
-            # inside `run-bazel-ci.sh` to local Windows execution with an MSVC
-            # host and the same gnullvm target.
+            # inside `run-bazel-ci.sh` to local Windows execution with gnullvm
+            # host tools and the same gnullvm target.
             bazel_wrapper_args+=(--windows-cross-compile)
           fi
 

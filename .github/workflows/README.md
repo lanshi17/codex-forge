@@ -64,13 +64,28 @@ the stable status file contains exactly that commit; runtime receipt validation
 continues to reject absent, malformed or ambiguous commit records.
 
 Without BuildBuddy credentials, Windows cross jobs compile locally with the
-same explicit gnullvm target and an MSVC execution host. The local test toolchain
-allows those gnullvm binaries to run on Windows; it does not change their ABI.
+same explicit gnullvm target and gnullvm execution host. A stable Rust 1.95.0
+host toolchain keeps proc-macros on the GNU ABI used by LLVM and AWS-LC. The local
+test toolchain allows those binaries to run on Windows without changing their ABI.
 Failure-log queries retain the target platform so diagnostics use the matching
 output directory. Remote jobs retain their Linux execution platform.
 
+Keyless builds disable the redundant Bazel disk cache; declared outputs and the
+repository download cache remain available. Disposable GitHub-hosted Linux
+machines reclaim unused Android, .NET and Haskell SDK installations. On macOS,
+only unselected Xcode installations are removed, preserving the active Xcode and
+its aliases. This cleanup never runs on local or self-hosted machines. Hosted
+macOS also raises kernel file limits so the isolated high-descriptor PTY
+regression can reach descriptors above 10240; its assertions remain unchanged.
+The Wine suite reserves two CPUs and uses two Rust test threads, avoiding
+concurrent prefix initialization overload while retaining its test deadlines.
+Linux rollout tests additionally run the alternate-group fixture directly on
+the host and require one actual passing test with no precondition skip.
+
 The initial hosted runs exceeded the former SDK 20-minute and Bazel/lint
-30-minute job limits while compiling. Those cold-build jobs now allow 120
+30-minute job limits while compiling. A subsequent cold run also exhausted
+the 120-minute SDK, Linux release, macOS test and Unix lint job budgets, as
+confirmed by GitHub annotations. Those pre-merge cold-build jobs now allow 240
 minutes. Individual test deadlines, targets, shards and required-check logic
 are unchanged; exceeding the job limit still fails qualification.
 

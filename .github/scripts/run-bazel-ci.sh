@@ -259,7 +259,6 @@ if [[ "${RUNNER_OS:-}" == "Windows" && $windows_cross_compile -eq 1 && -z "${BUI
   # Windows cross-compilation depends on authenticated RBE. Preserve the local
   # Windows host while retaining the intended gnullvm target selection.
   ci_config=ci-windows
-  windows_msvc_host_platform=1
 fi
 
 post_config_bazel_args=()
@@ -301,12 +300,13 @@ fi
 
 if [[ "${RUNNER_OS:-}" == "Windows" && $windows_cross_compile -eq 1 && -z "${BUILDBUDDY_API_KEY:-}" ]]; then
   # The Windows cross-compile config depends on authenticated remote
-  # execution. Keep tests local while retaining its target and test toolchain
-  # selection, avoiding MSVC target libraries in gnullvm shards.
+  # execution. Keep both target libraries and host proc-macros on the GNU ABI;
+  # MSVC Rust host tools otherwise mix with hermetic LLVM's GNU AWS-LC objects.
   post_config_bazel_args+=(
+    --host_platform=//:local_windows
     --platforms=//:windows_x86_64_gnullvm
-    --extra_execution_platforms=//:windows_x86_64_msvc
-    --extra_toolchains=//:windows_gnullvm_tests_on_msvc_host_toolchain
+    --extra_execution_platforms=//:windows_x86_64_gnullvm
+    --extra_toolchains=//:windows_gnullvm_tests_on_gnullvm_host_toolchain
     --jobs=8
   )
 fi
@@ -421,6 +421,9 @@ if [[ -n "${BUILDBUDDY_API_KEY:-}" ]]; then
   bazel_run_args+=("--config=${ci_config}")
 else
   echo "BuildBuddy API key is not available; using local Bazel configuration."
+  # Hosted machines already retain declared outputs in output_base. A second
+  # complete copy in the disk cache exhausts their cold-build disk budget.
+  bazel_run_args+=(--disk_cache=)
   if [[ "${bazel_args[0]}" == "test" ]]; then
     bazel_run_args+=("--test_env=INSTA_UPDATE=no")
   fi

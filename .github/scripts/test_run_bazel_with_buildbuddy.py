@@ -336,7 +336,7 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
             self.assertEqual(len(calls), 2)
             for args in calls:
                 self.assertIn("--platforms=//:windows_x86_64_gnullvm", args)
-                self.assertIn("--host_platform=//:local_windows_msvc", args)
+                self.assertIn("--host_platform=//:local_windows", args)
 
     @unittest.skipUnless(os.name == "posix", "exercises the Bash CI helper on Unix")
     def test_windows_voice_inputs_are_fixed_and_do_not_reach_linux_rbe(self) -> None:
@@ -420,11 +420,15 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
                             self.assertLess(args.index(arg), args.index("--"))
                     if cross_compile and not remote:
                         for arg in (
+                            "--host_platform=//:local_windows",
                             "--platforms=//:windows_x86_64_gnullvm",
-                            "--extra_execution_platforms=//:windows_x86_64_msvc",
-                            "--extra_toolchains=//:windows_gnullvm_tests_on_msvc_host_toolchain",
+                            "--extra_execution_platforms=//:windows_x86_64_gnullvm",
+                            "--extra_toolchains=//:windows_gnullvm_tests_on_gnullvm_host_toolchain",
                         ):
                             self.assertIn(arg, args)
+                        self.assertNotIn("--host_platform=//:local_windows_msvc", args)
+                    if not remote:
+                        self.assertIn("--disk_cache=", args)
 
 
 if __name__ == "__main__":

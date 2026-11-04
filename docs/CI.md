@@ -26,6 +26,12 @@ macOS 后续修复使用相同 ARM64 架构的标准 `macos-15` 替代收费 `ma
 
 同轮 GitHub annotations 明确记录 SDK 超过 20 分钟，Bazel 和跨平台 lint 超过 30 分钟的作业期限，当时仍在冷构建。后续将这些托管构建作业上限设为 120 分钟，测试自身的期限、目标、分片、断言和必需检查均保留。超时仍导致 CI 不合格，延长作业上限不代表本轮已通过。
 
-候选 91b6741f821722ec70e89d36a3d0f8039f2861e3 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41809576857)已通过 Windows 提交信息预检、Windows argument-comment lint、两个独立 Workspace 和仓库检查。但 Windows 测试、Clippy 和发布构建均出现 GNU 原生库与 MSVC Rust 目标混链，整轮尚不合格。无 BuildBuddy 凭据时，回退逻辑只保留了 MSVC 宿主，丢失原定 gnullvm 目标；后续修复显式保留 gnullvm 目标与本地测试工具链，同时让失败日志查询使用同一目标平台。该修复仍须新的完整远端 CI 验收。
+候选 91b6741f821722ec70e89d36a3d0f8039f2861e3 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41809576857)已通过 Windows 提交信息预检、Windows argument-comment lint、两个独立 Workspace 和仓库检查。但 Windows 测试、Clippy 和发布构建均出现 GNU 原生库与 MSVC Rust 目标混链，整轮尚不合格。分片 1 还确认 `sqlx-macros` 宿主工具存在相同问题，说明仅恢复目标平台不足以解决混链。后续本地回退同时使用 gnullvm 宿主和目标，提供 Rust 1.95.0 宿主工具链及本地测试工具链，并让失败日志查询使用同一目标平台。远程 Linux 执行路径保留。
+
+同轮 Linux 测试以及 macOS 发布构建、Clippy 明确出现磁盘耗尽。无远程凭据时禁用重复保存完整产物的 Bazel 磁盘缓存，保留声明输出和依赖下载缓存。一次性 GitHub 托管 Linux 机器清理未使用的 Android、.NET、Haskell SDK；macOS 仅清理未选中的 Xcode，保留当前选中安装及其别名。本机、自托管机器不执行清理，未能识别有效 Xcode 时直接失败。Linux Wine/PowerShell 超时已独立复现：单用例通过，而全套并发初始化 Wine prefix 超时。全套改为两线程并声明两 CPU 后，本地按最终 BUILD 配置实际通过 13 项，原有 60 秒目标期限与 PowerShell 30 秒期限保留，远端仍待验收。
 
 工程 CI 合格与研究可以开跑是两个独立条件。即使 CI 通过，正式五组 Pilot 仍须通过方法忠实度、独立真值、隐藏评估、资源预算和环境冻结等 readiness 门禁，见[路线图](../btae-eval/protocol/ROADMAP.md)。
+
+同轮 macOS PTY 高描述符测试在准备阶段触发 `EMFILE`；托管 macOS 配置仅提高内核文件数量上限，使隔离子进程可以实际打开 10240 以上的描述符，保留原有回退、进程组及父进程隔离断言。Linux rollout 所有权回归则排除 user namespace 中未映射的附加组 ID，并增加映射选择回归。CI 另在宿主真实组映射下执行同一所有权测试，必须实际通过一项且不得跳过，确保组保留行为确实被验证。
+
+GitHub annotations 已确认该轮 SDK、Linux 发布构建及 macOS 测试再次超过 120 分钟总时限；Unix lint 也在同一时限被取消。相关预合并冷构建作业预算提高到 240 分钟，各单项测试期限不变。本地 Python 回归 86 项、rollout 全套 164 项及宿主所有权用例实际 1 项均通过，依赖锁检查通过。Windows gnullvm 单元测试目标已通过 Bazel 工具链解析；这不能替代 Windows 实际编译、执行及完整远端 CI。

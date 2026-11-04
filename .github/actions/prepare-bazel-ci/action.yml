@@ -32,6 +32,25 @@ runs:
     - id: setup_ci
       uses: ./.github/actions/setup-ci
 
+    - name: Reclaim unused hosted SDK disk space
+      if: runner.environment == 'github-hosted' && runner.os != 'Windows'
+      shell: bash
+      run: python3 .github/scripts/reclaim_hosted_build_space.py
+
+    - name: Allow macOS high-descriptor regression fixtures
+      if: runner.environment == 'github-hosted' && runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        # The isolated PTY regression opens descriptors above Darwin's
+        # OPEN_MAX (10240). RLIMIT_NOFILE alone cannot raise the kernel caps.
+        if (( $(sysctl -n kern.maxfiles) < 65536 )); then
+          sudo sysctl -w kern.maxfiles=65536
+        fi
+        if (( $(sysctl -n kern.maxfilesperproc) < 32768 )); then
+          sudo sysctl -w kern.maxfilesperproc=32768
+        fi
+
     - name: Honor explicit MSVC runtime license acknowledgement (Windows)
       if: runner.os == 'Windows' && inputs.msvc-runtime-eula == '1'
       shell: bash
