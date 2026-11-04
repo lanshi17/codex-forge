@@ -1092,14 +1092,14 @@ pub unsafe fn revoke_ace(path: &Path, psid: *mut c_void) -> Result<()> {
     result
 }
 
-/// Grants RX to the null device for the given SID to support stdout/stderr redirection.
+/// Grants read/write access to the null device for stdout/stderr redirection.
 ///
 /// # Safety
 /// Caller must ensure `psid` is a valid SID pointer.
 pub unsafe fn allow_null_device(psid: *mut c_void) {
     let desired = 0x00020000 | 0x00040000; // READ_CONTROL | WRITE_DAC
     let h = CreateFileW(
-        to_wide(r"\\\\.\\NUL").as_ptr(),
+        to_wide(r"\\.\NUL").as_ptr(),
         desired,
         FILE_SHARE_READ | FILE_SHARE_WRITE,
         std::ptr::null_mut(),

@@ -734,6 +734,56 @@ fn legacy_capture_emits_output_and_preserves_descendant_after_normal_exit() {
 }
 
 #[test]
+fn legacy_capture_can_redirect_to_null_device() {
+    let _guard = legacy_process_test_guard();
+    let runtime = current_thread_runtime();
+    runtime.block_on(async move {
+        let workspace = TempDir::new_in(sandbox_cwd()).expect("create null-redirection workspace");
+        for permission_profile in [
+            PermissionProfile::workspace_write(),
+            PermissionProfile::read_only(),
+        ] {
+            let codex_home = sandbox_home("legacy-null-redirection");
+            let spawned = spawn_windows_sandbox_session_legacy(
+                &permission_profile,
+                workspace_roots_for(workspace.path()).as_slice(),
+                codex_home.path(),
+                vec![
+                    "C:\\Windows\\System32\\cmd.exe".to_string(),
+                    "/d".to_string(),
+                    "/c".to_string(),
+                    "echo discard>NUL && echo null-device-ready".to_string(),
+                ],
+                workspace.path(),
+                HashMap::new(),
+                /*timeout_ms*/ Some(5_000),
+                &[],
+                &[],
+                /*tty*/ false,
+                /*stdin_open*/ false,
+            )
+            .await
+            .expect("spawn null-redirection session");
+            let (stdout, exit_code) = collect_stdout_and_exit(
+                spawned,
+                codex_home.path(),
+                Duration::from_secs(/*secs*/ 10),
+            )
+            .await;
+            assert_eq!(
+                (
+                    exit_code,
+                    String::from_utf8_lossy(&stdout).trim().to_string()
+                ),
+                (0, "null-device-ready".to_string()),
+                "{}",
+                sandbox_log(codex_home.path()),
+            );
+        }
+    });
+}
+
+#[test]
 fn legacy_workspace_write_delete_is_limited_to_writable_roots() {
     let _guard = legacy_process_test_guard();
     let runtime = current_thread_runtime();

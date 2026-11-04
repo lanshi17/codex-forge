@@ -53,3 +53,5 @@ GitHub annotations 已确认该轮 SDK、Linux 发布构建及 macOS 测试再�
 本地文件监听、shell-command 和 PTY 三个 Linux 测试目标通过，文件监听和 shell-command 的库及测试二进制 Clippy 通过，Bazel 依赖锁检查通过。新增的 Windows 控制台调用片段与 PowerShell 命令构造函数通过 Windows 目标交叉编译和 Clippy；Windows PowerShell/ConPTY 行为仍待新候选的实际 CI 验收，不能把控制台继承假设当作已验证根因。
 
 后续 Windows 分片 4 先运行 Git、PowerShell、PTY、Windows 沙箱和文件监听五个单元测试目标，再执行原完整分片；两次调用复用相同参数与本机测试缓存，完整目标清单和汇总门禁保持原样。这样可在编译完整 Agent/TUI 前暴露运行期失败，减少下一轮定位的等待。
+
+配套复查还发现 NUL 设备 ACL 授权路径包含多余反斜杠。后续修正为 Win32 设备路径 `\\.\NUL`，并新增工作区可写、只读两种受限模式下的真实 `cmd.exe` 重定向回归：必须丢弃重定向内容、输出后续标记且退出码为零。设备授权实现通过 Windows 目标交叉编译和 Clippy，实际授权及新回归仍须 Windows CI 验证。
