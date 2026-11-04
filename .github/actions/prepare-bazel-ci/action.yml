@@ -7,6 +7,10 @@ inputs:
   cache-scope:
     description: Logical namespace used to keep concurrent Bazel jobs from reserving the same repository cache key.
     required: true
+  msvc-runtime-eula:
+    description: Explicit repository-owner acknowledgement of the MSVC runtime license.
+    required: false
+    default: ""
 outputs:
   repository-cache-path:
     description: Filesystem path used for the Bazel repository cache.
@@ -25,7 +29,7 @@ runs:
       uses: ./.github/actions/setup-ci
 
     - name: Honor explicit MSVC runtime license acknowledgement (Windows)
-      if: runner.os == 'Windows' && vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA == '1'
+      if: runner.os == 'Windows' && inputs.msvc-runtime-eula == '1'
       shell: bash
       # Opt in only after the repository owner confirms acceptance. An absent
       # variable must keep windows_support's license check closed.

@@ -43,8 +43,10 @@ Windows Bazel targets that materialize the MSVC runtime require explicit
 Visual Studio license acknowledgement. After the repository owner confirms
 acceptance of the [Microsoft terms](https://visualstudio.microsoft.com/license-terms),
 an administrator may set repository Actions variable
-`BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA` to `1`. `prepare-bazel-ci` forwards that
-acknowledgement only on Windows. An absent or different value leaves the
+`BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA` to `1`. Windows CI workflows pass that
+variable explicitly to `prepare-bazel-ci` through its `msvc-runtime-eula`
+input, including the nested argument-comment lint action. The action exports
+the acknowledgement only on Windows. An absent or different value leaves the
 existing license check closed; Linux and macOS receive no acknowledgement.
 No workflow accepts those terms automatically.
 

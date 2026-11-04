@@ -9,6 +9,10 @@ inputs:
     description: BuildBuddy API key used by Bazel CI.
     required: false
     default: ""
+  msvc-runtime-eula:
+    description: Explicit repository-owner acknowledgement passed to prepare-bazel-ci.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -17,6 +21,7 @@ runs:
       with:
         target: ${{ inputs.target }}
         cache-scope: bazel-argument-comment-lint
+        msvc-runtime-eula: ${{ inputs.msvc-runtime-eula }}
 
     - name: Install Linux sandbox build dependencies
       if: ${{ runner.os == 'Linux' }}

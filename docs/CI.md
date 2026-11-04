@@ -16,4 +16,8 @@
 
 macOS 后续修复使用相同 ARM64 架构的标准 `macos-15` 替代收费 `macos-15-xlarge`，原有 Intel 选择及交叉编译目标不变。所有后续修复仍需新候选的远端检查通过；旧提交的成功、作业已启动或本地配置验证均不能替代完整 CI 验收。
 
+用户已明确接受 Microsoft 条款并授权仅在 Windows CI 启用确认，仓库 Actions 变量已设置为 `1`。候选 2666f4578540f321e653e3df505414105f7b10b3 的[第 2 次运行](https://github.com/lanshi17/codex-forge/actions/runs/41796235406/attempts/2)中，Fence 和 Forge 检查通过，但共享 action 的许可步骤仍被跳过；后续改为工作流通过 `msvc-runtime-eula` 输入显式传值，并覆盖嵌套的 Windows lint 路径。未设置确认值时仍不导出许可变量。
+
+同轮 BTAE 的 200 毫秒超时测试在准备阶段已耗尽总预算，因此没有启动 Worker。后续断言同时覆盖准备阶段零次执行和运行阶段一次执行，两者均不得重试；独立分类回归与后代进程测试分别验证准备超时，以及运行中的信号终止和管道关闭。准备、执行、封存继续计入同一个总预算。此处是 CI 回归修复，不构成正式 Pilot 实验结果。
+
 工程 CI 合格与研究可以开跑是两个独立条件。即使 CI 通过，正式五组 Pilot 仍须通过方法忠实度、独立真值、隐藏评估、资源预算和环境冻结等 readiness 门禁，见[路线图](../btae-eval/protocol/ROADMAP.md)。

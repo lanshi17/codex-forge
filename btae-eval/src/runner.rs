@@ -925,6 +925,20 @@ pub fn verify_diagnostic(directory: &Path, manifest_path: &Path) -> Result<Diagn
 mod tests {
     use super::*;
     #[test]
+    fn setup_deadline_without_a_worker_is_still_a_timeout() {
+        let limits = Limits {
+            wall_ms: 200,
+            ..Default::default()
+        };
+        for elapsed_ms in [200, 250] {
+            assert_eq!(
+                final_outcome(&[], &Counters::default(), &limits, elapsed_ms).unwrap(),
+                ProcessOutcome::TimedOut
+            );
+        }
+    }
+
+    #[test]
     fn sealing_work_counts_toward_deadline_without_overwriting_other_stop_causes() {
         let limits = Limits {
             wall_ms: 100,

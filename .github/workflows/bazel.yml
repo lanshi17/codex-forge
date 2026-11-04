@@ -60,6 +60,7 @@ jobs:
         id: prepare_bazel
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
           target: ${{ matrix.target }}
           cache-scope: bazel-${{ github.job }}
 
@@ -176,6 +177,7 @@ jobs:
         id: prepare_bazel
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
           target: x86_64-pc-windows-gnullvm
           # Reuse the former monolithic Windows test cache for restores. Do
           # not save it from every shard below; duplicate uploads would sit on
@@ -276,6 +278,7 @@ jobs:
         id: prepare_bazel
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
           target: x86_64-pc-windows-msvc
           cache-scope: bazel-${{ github.job }}
 
@@ -367,6 +370,7 @@ jobs:
         id: prepare_bazel
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
           target: ${{ matrix.target }}
           cache-scope: bazel-${{ github.job }}
 
@@ -472,6 +476,7 @@ jobs:
         id: prepare_bazel
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
           target: ${{ matrix.target }}
           cache-scope: bazel-${{ github.job }}
 

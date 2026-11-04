@@ -271,6 +271,7 @@ jobs:
         if: matrix.build-system == 'bazel' || (matrix.bundle == 'primary' && contains(matrix.target, 'linux'))
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
           target: ${{ matrix.target }}
           cache-scope: bazel-release-${{ matrix.bundle }}
 
@@ -598,6 +599,7 @@ jobs:
       - name: Prepare Bazel CI
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
           target: ${{ matrix.target }}
           cache-scope: bazel-release-primary
       - name: Build matching helper and native runtime

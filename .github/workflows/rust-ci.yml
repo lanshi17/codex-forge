@@ -206,6 +206,7 @@ jobs:
         if: ${{ steps.argument_comment_lint_gate.outputs.run == 'true' }}
         uses: ./.github/actions/run-argument-comment-lint
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
           target: ${{ runner.os }}
           buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
 
