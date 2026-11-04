@@ -49,8 +49,11 @@ fn main() -> ExitCode {
         "malformed" => {
             println!("not-json");
             io::stdout().flush().unwrap();
-            thread::sleep(Duration::from_secs(2));
-            ExitCode::SUCCESS
+            // The supervisor must terminate us; natural exit must not satisfy
+            // the protocol-error cleanup test.
+            loop {
+                thread::sleep(Duration::from_millis(10));
+            }
         }
         "env" => {
             if std::env::var_os("HOME").is_some() {

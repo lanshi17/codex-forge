@@ -46,10 +46,17 @@ fn environment_is_cleared_and_only_allowlist_is_visible() {
 
 #[test]
 fn malformed_transcript_is_protocol_error() {
-    let start = std::time::Instant::now();
-    let record = run_live(request("malformed")).unwrap();
+    let mut req = request("malformed");
+    req.limits.wall_ms = 10_000;
+    let deadline_ms = req.limits.wall_ms;
+    let record = run_live(req).unwrap();
     assert_eq!(record.outcome, LiveOutcome::ProtocolError);
-    assert!(start.elapsed() < Duration::from_millis(500));
+    // Verify termination of a worker that never exits by itself, rather than
+    // imposing a subsecond benchmark on hashing and shared-runner scheduling.
+    assert_eq!(record.exit_code, None);
+    assert!(record.streams_closed);
+    assert_eq!(record.stdout_bytes, b"not-json\n".len() as u64);
+    assert!(record.elapsed_ms < deadline_ms);
     assert!(record.summary.is_none());
     assert!(record.note.unwrap() == "invalid_dsh_stream");
 }
