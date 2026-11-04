@@ -35,3 +35,7 @@ macOS 后续修复使用相同 ARM64 架构的标准 `macos-15` 替代收费 `ma
 同轮 macOS PTY 高描述符测试在准备阶段触发 `EMFILE`；托管 macOS 配置仅提高内核文件数量上限，使隔离子进程可以实际打开 10240 以上的描述符，保留原有回退、进程组及父进程隔离断言。Linux rollout 所有权回归则排除 user namespace 中未映射的附加组 ID，并增加映射选择回归。CI 另在宿主真实组映射下执行同一所有权测试，必须实际通过一项且不得跳过，确保组保留行为确实被验证。
 
 GitHub annotations 已确认该轮 SDK、Linux 发布构建及 macOS 测试再次超过 120 分钟总时限；Unix lint 也在同一时限被取消。相关预合并冷构建作业预算提高到 240 分钟，各单项测试期限不变。本地 Python 回归 86 项、rollout 全套 164 项及宿主所有权用例实际 1 项均通过，依赖锁检查通过。Windows gnullvm 单元测试目标已通过 Bazel 工具链解析；这不能替代 Windows 实际编译、执行及完整远端 CI。
+
+候选 6f87ab1f2df7e0ce39da9b26c9a567f4994eda18 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41827593270)已通过两个独立 Workspace、repo-checks 和基础格式检查。SDK 与 Linux 发布构建下载固定 zlib 时遭遇 Ubuntu 快照服务器 HTTP 503。后续为原快照 URL 增加同版本 Launchpad 官方构建备用地址；x86_64 和 ARM64 文件均已实际下载，并分别匹配原固定摘要 `7074b6a2f6367a10d280c00a1cb02e74277709180bab4f2491a2f355ab2d6c20`、`cbe3d39ec32d3cc27c021ae4af11e7c67bdf9d700d573207e0941d4038056278`。独立空缓存 Bazel 拉取已实际复现快照 503 并成功下载两个架构，验证备用切换及摘要校验。不升级依赖、不移除校验；完整 CI 仍待验收。
+
+编译动作级检查进一步发现：仅注册原生 gnullvm 工具链仍不足，通用 Windows 工具链优先级更高。后续优先注册具有 ABI 约束的工具链，并为自定义 stable/nightly 工具链显式设置对应通道条件，避免 stable 构建选到 MSVC 编译器发行包或 nightly 工具。stable 单元测试的动作查询现已确认所有 rustc 命令来自原生 gnullvm 1.95.0 发行包，宿主和目标均为 `x86_64-pc-windows-gnullvm`；nightly lint 动作也确认选择了独立的原生 gnullvm nightly 发行包；实际编译仍由远端 CI 验收。
