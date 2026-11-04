@@ -63,6 +63,12 @@ status helper. Before expensive compilation, a small Bazel build checks that
 the stable status file contains exactly that commit; runtime receipt validation
 continues to reject absent, malformed or ambiguous commit records.
 
+Without BuildBuddy credentials, Windows cross jobs compile locally with the
+same explicit gnullvm target and an MSVC execution host. The local test toolchain
+allows those gnullvm binaries to run on Windows; it does not change their ABI.
+Failure-log queries retain the target platform so diagnostics use the matching
+output directory. Remote jobs retain their Linux execution platform.
+
 The initial hosted runs exceeded the former SDK 20-minute and Bazel/lint
 30-minute job limits while compiling. Those cold-build jobs now allow 120
 minutes. Individual test deadlines, targets, shards and required-check logic

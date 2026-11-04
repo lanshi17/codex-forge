@@ -101,7 +101,7 @@ print_bazel_test_log_tails() {
   # mode can make `bazel info` fail, which would hide the real test log path.
   for arg in "${post_config_bazel_args[@]}"; do
     case "$arg" in
-      --host_platform=* | --repo_contents_cache=* | --repository_cache=*)
+      --host_platform=* | --platforms=* | --repo_contents_cache=* | --repository_cache=*)
         bazel_info_args+=("$arg")
         ;;
     esac
@@ -257,7 +257,7 @@ fi
 
 if [[ "${RUNNER_OS:-}" == "Windows" && $windows_cross_compile -eq 1 && -z "${BUILDBUDDY_API_KEY:-}" ]]; then
   # Windows cross-compilation depends on authenticated RBE. Preserve the local
-  # Windows build shape when credentials are unavailable.
+  # Windows host while retaining the intended gnullvm target selection.
   ci_config=ci-windows
   windows_msvc_host_platform=1
 fi
@@ -301,9 +301,14 @@ fi
 
 if [[ "${RUNNER_OS:-}" == "Windows" && $windows_cross_compile -eq 1 && -z "${BUILDBUDDY_API_KEY:-}" ]]; then
   # The Windows cross-compile config depends on authenticated remote
-  # execution. When credentials are unavailable, keep the local build shape
-  # and its lower concurrency cap.
-  post_config_bazel_args+=(--jobs=8)
+  # execution. Keep tests local while retaining its target and test toolchain
+  # selection, avoiding MSVC target libraries in gnullvm shards.
+  post_config_bazel_args+=(
+    --platforms=//:windows_x86_64_gnullvm
+    --extra_execution_platforms=//:windows_x86_64_msvc
+    --extra_toolchains=//:windows_gnullvm_tests_on_msvc_host_toolchain
+    --jobs=8
+  )
 fi
 
 if [[ -n "${BAZEL_REPO_CONTENTS_CACHE:-}" ]]; then

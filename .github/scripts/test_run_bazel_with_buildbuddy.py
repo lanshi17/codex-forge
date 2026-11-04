@@ -286,6 +286,59 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
         self.assertEqual(result.returncode, 37, result.stderr)
 
     @unittest.skipUnless(os.name == "posix", "exercises the Bash CI helper on Unix")
+    def test_keyless_windows_failure_logs_use_the_test_target_platform(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            capture = Path(temp_dir) / "args.jsonl"
+            testlogs = Path(temp_dir) / "testlogs"
+            test_log = testlogs / "fixture" / "test" / "test.log"
+            test_log.parent.mkdir(parents=True)
+            test_log.write_text("fixture failure details\n", encoding="utf-8")
+            fake_bazel = Path(temp_dir) / "fake-bazel"
+            fake_bazel.write_text(
+                f"#!{sys.executable}\n"
+                "import json, os, sys\n"
+                "with open(os.environ['BAZEL_CAPTURE'], 'a') as f:\n"
+                "    f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                "if 'info' in sys.argv:\n"
+                "    print(os.environ['FIXTURE_TESTLOGS'])\n"
+                "else:\n"
+                "    print('FAIL: //fixture:test')\n"
+                "    sys.exit(37)\n",
+                encoding="utf-8",
+            )
+            fake_bazel.chmod(0o755)
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(Path(__file__).with_name("run-bazel-ci.sh")),
+                    "--windows-cross-compile",
+                    "--print-failed-test-logs",
+                    "--",
+                    "test",
+                    "--",
+                    "//fixture:test",
+                ],
+                env={
+                    "PATH": os.defpath,
+                    "RUNNER_OS": "Windows",
+                    "CODEX_BAZEL_BIN": str(fake_bazel),
+                    "BAZEL_CAPTURE": str(capture),
+                    "FIXTURE_TESTLOGS": str(testlogs),
+                    "CODEX_BAZEL_WINDOWS_PATH": r"C:\Windows",
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 37, result.stderr)
+            self.assertIn("fixture failure details", result.stdout)
+            calls = [json.loads(line) for line in capture.read_text().splitlines()]
+            self.assertEqual(len(calls), 2)
+            for args in calls:
+                self.assertIn("--platforms=//:windows_x86_64_gnullvm", args)
+                self.assertIn("--host_platform=//:local_windows_msvc", args)
+
+    @unittest.skipUnless(os.name == "posix", "exercises the Bash CI helper on Unix")
     def test_windows_voice_inputs_are_fixed_and_do_not_reach_linux_rbe(self) -> None:
         with TemporaryDirectory() as temp_dir:
             capture = Path(temp_dir) / "args.json"
@@ -365,6 +418,13 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
                         else:
                             self.assertIn(arg, args)
                             self.assertLess(args.index(arg), args.index("--"))
+                    if cross_compile and not remote:
+                        for arg in (
+                            "--platforms=//:windows_x86_64_gnullvm",
+                            "--extra_execution_platforms=//:windows_x86_64_msvc",
+                            "--extra_toolchains=//:windows_gnullvm_tests_on_msvc_host_toolchain",
+                        ):
+                            self.assertIn(arg, args)
 
 
 if __name__ == "__main__":

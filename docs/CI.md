@@ -26,4 +26,6 @@ macOS 后续修复使用相同 ARM64 架构的标准 `macos-15` 替代收费 `ma
 
 同轮 GitHub annotations 明确记录 SDK 超过 20 分钟，Bazel 和跨平台 lint 超过 30 分钟的作业期限，当时仍在冷构建。后续将这些托管构建作业上限设为 120 分钟，测试自身的期限、目标、分片、断言和必需检查均保留。超时仍导致 CI 不合格，延长作业上限不代表本轮已通过。
 
+候选 91b6741f821722ec70e89d36a3d0f8039f2861e3 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41809576857)已通过 Windows 提交信息预检、Windows argument-comment lint、两个独立 Workspace 和仓库检查。但 Windows 测试、Clippy 和发布构建均出现 GNU 原生库与 MSVC Rust 目标混链，整轮尚不合格。无 BuildBuddy 凭据时，回退逻辑只保留了 MSVC 宿主，丢失原定 gnullvm 目标；后续修复显式保留 gnullvm 目标与本地测试工具链，同时让失败日志查询使用同一目标平台。该修复仍须新的完整远端 CI 验收。
+
 工程 CI 合格与研究可以开跑是两个独立条件。即使 CI 通过，正式五组 Pilot 仍须通过方法忠实度、独立真值、隐藏评估、资源预算和环境冻结等 readiness 门禁，见[路线图](../btae-eval/protocol/ROADMAP.md)。
