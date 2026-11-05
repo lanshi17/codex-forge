@@ -35,7 +35,7 @@ jobs:
           anyhow = "=1.0.103"
           tempfile = "=3.27.0"
           pretty_assertions = "=1.4.1"
-          windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_Storage_FileSystem", "Win32_System_StationsAndDesktops", "Win32_Graphics_Gdi"] }
+          windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_Storage_FileSystem", "Win32_System_StationsAndDesktops", "Win32_Graphics_Gdi", "Win32_System_Console", "Win32_System_WindowsProgramming", "Win32_System_Pipes", "Win32_System_JobObjects"] }
           ''')
           source = root / "codex-rs/windows-sandbox-rs/src"
           wide = (source / "winutil.rs").read_text()
@@ -43,7 +43,7 @@ jobs:
           end = wide.index("\n}", start) + 2
           lib = "#![allow(unsafe_op_in_unsafe_fn, dead_code)]\n"
           lib += "mod winutil { use std::ffi::OsStr; use std::os::windows::ffi::OsStrExt;\n" + wide[start:end] + "\n}\n"
-          for name in ("token", "token_user"):
+          for name in ("token", "token_user", "proc_thread_attr"):
               lib += "#[path = " + json.dumps(str(source / (name + ".rs"))) + "] mod " + name + ";\n"
           lib += "#[cfg(test)] #[path = " + json.dumps(str(root / "scripts/windows-startup-probe.rs")) + "] mod startup_probe;\n"
           (probe / "src/lib.rs").write_text(lib)
@@ -65,5 +65,6 @@ jobs:
           $bin = Join-Path $env:RUNNER_TEMP "llvm-mingw-20261104-ucrt-x86_64/bin"
           $env:CARGO_TARGET_X86_64_PC_WINDOWS_GNULLVM_LINKER = Join-Path $bin "x86_64-w64-mingw32-clang.exe"
           $env:PATH = "$bin;$env:PATH"
+          $env:RUSTFLAGS = "-C target-feature=+crt-static"
           cargo +1.95.0 test --manifest-path "$env:RUNNER_TEMP/native-token-probe/Cargo.toml" --target x86_64-pc-windows-gnullvm startup_probe -- --nocapture
           exit $LASTEXITCODE
