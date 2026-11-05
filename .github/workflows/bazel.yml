@@ -35,7 +35,7 @@ jobs:
           anyhow = "=1.0.103"
           tempfile = "=3.27.0"
           pretty_assertions = "=1.4.1"
-          windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_Storage_FileSystem"] }
+          windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_Storage_FileSystem", "Win32_System_StationsAndDesktops", "Win32_Graphics_Gdi"] }
           ''')
           source = root / "codex-rs/windows-sandbox-rs/src"
           wide = (source / "winutil.rs").read_text()
@@ -45,9 +45,10 @@ jobs:
           lib += "mod winutil { use std::ffi::OsStr; use std::os::windows::ffi::OsStrExt;\n" + wide[start:end] + "\n}\n"
           for name in ("token", "token_user"):
               lib += "#[path = " + json.dumps(str(source / (name + ".rs"))) + "] mod " + name + ";\n"
+          lib += "#[cfg(test)] #[path = " + json.dumps(str(root / "scripts/windows-startup-probe.rs")) + "] mod startup_probe;\n"
           (probe / "src/lib.rs").write_text(lib)
       - name: Run native token regressions on NTFS
         shell: pwsh
         run: |
-          cargo +1.95.0 test --manifest-path "$env:RUNNER_TEMP/native-token-probe/Cargo.toml" -- --nocapture
+          cargo +1.95.0 test --manifest-path "$env:RUNNER_TEMP/native-token-probe/Cargo.toml" startup_probe -- --nocapture
           exit $LASTEXITCODE
