@@ -80,6 +80,7 @@ impl Drop for ProtectedDirectory {
 fn protected_directory_does_not_discard_accessible_deny_matches() {
     #[cfg(windows)]
     if let Some(root) = std::env::var_os("CODEX_TEST_DENY_READ_RESTRICTED_ROOT") {
+        remove_backup_privileges();
         assert_accessible_deny_matches(Path::new(&root));
         return;
     }
@@ -97,59 +98,89 @@ fn protected_directory_does_not_discard_accessible_deny_matches() {
 
     #[cfg(windows)]
     {
-        // CI enables backup privileges, which let directory enumeration bypass
-        // this fixture's ACL. Restrict a separate process, including its rg child,
-        // rather than changing the shared test process's privileges. The parent
-        // owns ACL setup and cleanup, which the restricted child cannot perform.
-        let codex_home = TempDir::new().expect("restricted codex home");
-        let cwd = AbsolutePathBuf::from_absolute_path(temp.path()).expect("workspace");
-        let mut env = std::collections::HashMap::from([
-            (
-                "CODEX_TEST_DENY_READ_RESTRICTED_ROOT".to_string(),
-                cwd.display().to_string(),
-            ),
-            ("TEMP".to_string(), cwd.display().to_string()),
-            ("TMP".to_string(), cwd.display().to_string()),
-        ]);
-        for name in ["PATH", "SystemRoot", "COMSPEC", "USERPROFILE"] {
-            if let Ok(value) = std::env::var(name) {
-                env.insert(name.to_string(), value);
-            }
-        }
-        let result = crate::run_windows_sandbox_capture(
-            &codex_protocol::models::PermissionProfile::workspace_write(),
-            std::slice::from_ref(&cwd),
-            codex_home.path(),
-            vec![
-                std::env::current_exe()
-                    .expect("test binary")
-                    .display()
-                    .to_string(),
-                "--exact".to_string(),
-                std::thread::current()
-                    .name()
-                    .expect("test name")
-                    .to_string(),
-            ],
-            cwd.as_path(),
-            env,
-            /*timeout_ms*/ Some(30_000),
-            /*cancellation*/ None,
-        )
-        .expect("run protected-directory regression without backup privileges");
+        // CI enables backup privileges, which can bypass the fixture's ACL.
+        // Remove them only inside a fresh test process, before it launches rg.
+        // The parent retains its privileges to restore the protected directory.
+        let mut command = tokio::process::Command::from(codex_utils_process::background_command(
+            std::env::current_exe().expect("test binary"),
+        ));
+        let result = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("child process runtime")
+            .block_on(async {
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(/*secs*/ 30),
+                    command
+                        .arg("--exact")
+                        .arg(std::thread::current().name().expect("test name"))
+                        .env("CODEX_TEST_DENY_READ_RESTRICTED_ROOT", temp.path())
+                        .current_dir(temp.path())
+                        .kill_on_drop(true)
+                        .output(),
+                )
+                .await
+                .expect("protected-directory regression timed out")
+                .expect("run protected-directory regression without backup privileges")
+            });
         let stdout = String::from_utf8_lossy(&result.stdout);
         let stderr = String::from_utf8_lossy(&result.stderr);
-        assert_eq!(
-            (result.exit_code, result.timed_out),
-            (0, false),
-            "{stdout}\n{stderr}"
-        );
+        assert!(result.status.success(), "{stdout}\n{stderr}");
         assert!(stdout.contains("test result: ok. 1 passed"), "{stdout}");
     }
 
     #[cfg(not(windows))]
     assert_accessible_deny_matches(temp.path());
     drop(guard);
+}
+
+#[cfg(windows)]
+fn remove_backup_privileges() {
+    use std::os::windows::io::AsRawHandle;
+    use std::os::windows::io::FromRawHandle;
+    use std::os::windows::io::OwnedHandle;
+    use windows_sys::Win32::Foundation::GetLastError;
+    use windows_sys::Win32::Security::AdjustTokenPrivileges;
+    use windows_sys::Win32::Security::LookupPrivilegeValueW;
+    use windows_sys::Win32::Security::SE_PRIVILEGE_REMOVED;
+    use windows_sys::Win32::Security::TOKEN_PRIVILEGES;
+
+    let token = unsafe {
+        OwnedHandle::from_raw_handle(
+            crate::token::get_current_token_for_restriction().expect("test process token"),
+        )
+    };
+    for name in ["SeBackupPrivilege", "SeRestorePrivilege"] {
+        let mut privileges: TOKEN_PRIVILEGES = unsafe { std::mem::zeroed() };
+        privileges.PrivilegeCount = 1;
+        privileges.Privileges[0].Attributes = SE_PRIVILEGE_REMOVED;
+        assert_ne!(
+            unsafe {
+                LookupPrivilegeValueW(
+                    std::ptr::null(),
+                    crate::winutil::to_wide(name).as_ptr(),
+                    &mut privileges.Privileges[0].Luid,
+                )
+            },
+            0,
+            "resolve {name}"
+        );
+        assert_ne!(
+            unsafe {
+                AdjustTokenPrivileges(
+                    token.as_raw_handle(),
+                    /*disableallprivileges*/ 0,
+                    &privileges,
+                    /*bufferlength*/ 0,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            },
+            0,
+            "remove {name}: {}",
+            unsafe { GetLastError() }
+        );
+    }
 }
 
 fn assert_accessible_deny_matches(root: &Path) {

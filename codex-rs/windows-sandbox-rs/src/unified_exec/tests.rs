@@ -784,6 +784,47 @@ fn legacy_capture_can_redirect_to_null_device() {
 }
 
 #[test]
+fn legacy_capture_runs_rust_binary_in_each_permission_mode() {
+    let _guard = legacy_process_test_guard();
+    let workspace = TempDir::new_in(sandbox_cwd()).expect("create Rust startup workspace");
+    for permission_profile in [
+        PermissionProfile::workspace_write(),
+        PermissionProfile::read_only(),
+    ] {
+        let codex_home = sandbox_home("legacy-rust-startup");
+        let result = run_windows_sandbox_capture(
+            &permission_profile,
+            workspace_roots_for(workspace.path()).as_slice(),
+            codex_home.path(),
+            vec![
+                std::env::current_exe()
+                    .expect("test binary")
+                    .display()
+                    .to_string(),
+                "--list".to_string(),
+            ],
+            workspace.path(),
+            HashMap::new(),
+            /*timeout_ms*/ Some(10_000),
+            /*cancellation*/ None,
+        )
+        .expect("start Rust binary in legacy sandbox");
+        let stdout = String::from_utf8_lossy(&result.stdout);
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert_eq!(
+            (result.exit_code, result.timed_out),
+            (0, false),
+            "stdout={stdout:?} stderr={stderr:?}\n{}",
+            sandbox_log(codex_home.path()),
+        );
+        assert!(
+            stdout.contains("legacy_capture_runs_rust_binary_in_each_permission_mode: test"),
+            "stdout={stdout:?} stderr={stderr:?}"
+        );
+    }
+}
+
+#[test]
 fn legacy_workspace_write_delete_is_limited_to_writable_roots() {
     let _guard = legacy_process_test_guard();
     let runtime = current_thread_runtime();

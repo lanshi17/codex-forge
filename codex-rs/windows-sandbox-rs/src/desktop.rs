@@ -61,8 +61,11 @@ use windows_sys::Win32::System::StationsAndDesktops::DESKTOP_SWITCHDESKTOP;
 use windows_sys::Win32::System::StationsAndDesktops::DESKTOP_WRITE_DAC;
 use windows_sys::Win32::System::StationsAndDesktops::DESKTOP_WRITE_OWNER;
 use windows_sys::Win32::System::StationsAndDesktops::DESKTOP_WRITEOBJECTS;
+use windows_sys::Win32::System::StationsAndDesktops::GetProcessWindowStation;
+use windows_sys::Win32::System::StationsAndDesktops::GetUserObjectInformationW;
 use windows_sys::Win32::System::StationsAndDesktops::HDESK;
 use windows_sys::Win32::System::StationsAndDesktops::OpenDesktopW;
+use windows_sys::Win32::System::StationsAndDesktops::UOI_NAME;
 
 const PRIVATE_DESKTOP_PREFIX: &str = "CodexSandboxDesktop-";
 
@@ -215,7 +218,7 @@ impl LaunchDesktop {
 
     pub fn prepare(logs_base_dir: Option<&Path>) -> Result<Self> {
         let private_desktop = PrivateDesktop::create(logs_base_dir)?;
-        let startup_name = to_wide(format!("Winsta0\\{}", private_desktop.name));
+        let startup_name = private_desktop_startup_name(&private_desktop.name)?;
         Ok(Self {
             _private_desktop: private_desktop,
             startup_name,
@@ -251,13 +254,59 @@ impl LaunchDesktop {
                 handle,
                 name: name.to_owned(),
             },
-            startup_name: to_wide(format!("Winsta0\\{name}")),
+            startup_name: private_desktop_startup_name(name)?,
         })
     }
 
     pub fn startup_info_desktop(&self) -> *mut u16 {
         self.startup_name.as_ptr() as *mut u16
     }
+}
+
+fn private_desktop_startup_name(name: &str) -> Result<Vec<u16>> {
+    // CreateDesktopW and OpenDesktopW use the caller's window station. Service
+    // sessions need not run on Winsta0; naming that station would select a
+    // different (or missing) desktop during the child's user32 initialization.
+    let station = unsafe { GetProcessWindowStation() };
+    if station.is_null() {
+        anyhow::bail!("GetProcessWindowStation failed: {}", unsafe {
+            GetLastError()
+        });
+    }
+    let mut needed = 0;
+    unsafe {
+        GetUserObjectInformationW(
+            station,
+            UOI_NAME,
+            ptr::null_mut(),
+            /*nlength*/ 0,
+            &mut needed,
+        );
+    }
+    if needed == 0 || needed % 2 != 0 {
+        anyhow::bail!("invalid window station name length: {needed}");
+    }
+    let mut buffer = vec![0u16; needed as usize / 2];
+    if unsafe {
+        GetUserObjectInformationW(
+            station,
+            UOI_NAME,
+            buffer.as_mut_ptr().cast(),
+            needed,
+            &mut needed,
+        )
+    } == 0
+    {
+        anyhow::bail!("GetUserObjectInformationW failed: {}", unsafe {
+            GetLastError()
+        });
+    }
+    let length = buffer
+        .iter()
+        .position(|unit| *unit == 0)
+        .ok_or_else(|| anyhow::anyhow!("window station name is not null-terminated"))?;
+    let station_name = String::from_utf16(&buffer[..length])?;
+    Ok(to_wide(format!("{station_name}\\{name}")))
 }
 
 /// Reuses a private desktop only for the same sandbox account and effective permissions.

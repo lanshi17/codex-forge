@@ -63,3 +63,11 @@ GitHub annotations 已确认该轮 SDK、Linux 发布构建及 macOS 测试再�
 Linux GNU 日志还确认大可执行文件跨卷复制、SQLite 写入和缓存封存均因磁盘耗尽失败；musl 的 V8 归档复制也返回 `ENOSPC`。守护进程生命周期夹具改为在临时目录所在卷准备共享可执行文件，并为各任务建立硬链接；活跃夹具以 `Arc` 持有它，最后一个夹具释放时清理，安装器真实复制测试继续保留。无远程执行密钥的托管 Unix 构建限制为四个构建动作、一个测试目标，普通 Rust 构建关闭 DWARF，不改变优化等级、调试断言或测试目标。发布归档的配置转换显式恢复行号调试信息；动作查询已确认普通构建的 `-Cdebuginfo=0` 之后有 `-Cdebuginfo=line-tables-only`，但这不是完整发布构建验收。
 
 本轮本地验证：SDK 相关测试 83 项、Bazel 包装器 16 项（含新增托管/自托管、普通/发布配置组合）、登录 229 项、UDS 的 Unix 测试 5 项及相关 Clippy 通过；Linux 代理路由定向回归实际执行一项且通过。Linux 沙箱全套本机运行仍有四项失败，包含临时盘耗尽、网络命名空间及本机路径环境问题，不记为全套通过。守护进程 13 项首次也因本机 `/tmp` 空间不足失败；随后仅为该次测试绑定独立临时目录，全部 13 项通过。Windows 运行期修改仍须远端复测，既有 Windows 权限与初始化失败及 Unix 冷构建时限问题继续阻断整体交付。
+
+候选 `eb591f6dc5bcb071f6b25dbbc7872eae4c442fa2` 的[远端运行](https://github.com/lanshi17/codex-forge/actions/runs/41989712079)继续暴露 Windows 越界删除及 Rust 子进程 `0xC0000142` 初始化失败；令牌 SID 测试通过仍不代表沙箱边界有效。macOS 参数注释 lint 在加载固定 toml2json 时收到 HTTP 502，尚未执行源码检查。Linux Clippy 在链接测试程序时耗尽磁盘，并非已确认的 lint 违规。
+
+后续修复与诊断：节流测试也改用 Tokio 虚拟时间，原批次和提前触发断言保留。目录访问夹具在独立无控制台子进程中移除备份/还原特权，保留真实 PermissionDenied 与扫描结果断言；不再让目录扫描测试同时依赖生产沙箱启动。生产启动仍新增两种权限模式下执行实际 Rust 测试程序的回归。私有桌面启动路径使用实际窗口站名称，与 CreateDesktopW/OpenDesktopW 的所属站一致；这只是待 Windows 实测的初始化修复假设，不代表已确认 DLL 失败根因。
+
+ACL 安装不再忽略 allow、deny-write 及工作区保护错误，底层 allow setter 的原生错误也向上传递；两个启动调用方在该失败路径关闭原始令牌句柄。新增原生令牌回归对公共 ACL 目录执行真实读取、写入、文件删除及目录删除，并记录独立 AccessCheck 结果以区分访问检查与 NTFS 删除行为。此回归尚待 Windows 执行，越界删除仍是阻断项，未收紧公共目录夹具或降低原断言。
+
+Clippy 配置只请求 `clippy_checks` 输出，避免额外链接所有测试程序；目标清单、全部 lint 规则及独立完整测试/发布任务不变。本地文件监听单元测试通过，库与实际 `*-unit-tests-bin` 的 Clippy 通过；动作查询确认测试源码使用 `--test`、`--emit=metadata` 并产出 `.clippy.ok`。隔离 Windows 目标检查覆盖令牌测试及桌面名称查询，并通过 Clippy；它不等同于完整 Windows crate 编译或运行期验收。本轮 OMP old-coder 只读审查已完成；CommandCode 周额度不足，使用已授权的 DeepSeek 路由。审查建议作为待验证假设处理，未采用放宽桌面 ACL 或削弱删除检查的建议。正式 Pilot 继续延期，PR 保持草稿，完整 blocking-ci 成功前不合并。
