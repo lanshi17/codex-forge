@@ -15,7 +15,7 @@ jobs:
           persist-credentials: false
       - name: Install fixed Rust toolchain
         shell: pwsh
-        run: rustup toolchain install 1.95.0 --profile minimal --target x86_64-pc-windows-gnu
+        run: rustup toolchain install 1.95.0 --profile minimal --target x86_64-pc-windows-gnullvm
       - name: Generate isolated harness from production sources
         shell: python
         run: |
@@ -52,11 +52,18 @@ jobs:
         run: |
           cargo +1.95.0 test --manifest-path "$env:RUNNER_TEMP/native-token-probe/Cargo.toml" startup_probe -- --nocapture
           exit $LASTEXITCODE
-      - name: Probe GNU CRT startup
+      - name: Install fixed llvm-mingw diagnostic toolchain
         shell: pwsh
-        env:
-          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: C:\msys64\mingw64\bin\gcc.exe
         run: |
-          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
-          cargo +1.95.0 test --manifest-path "$env:RUNNER_TEMP/native-token-probe/Cargo.toml" --target x86_64-pc-windows-gnu startup_probe -- --nocapture
+          $zip = Join-Path $env:RUNNER_TEMP "llvm-mingw.zip"
+          Invoke-WebRequest -Uri "https://github.com/mstorsjo/llvm-mingw/releases/download/20261104/llvm-mingw-20261104-ucrt-x86_64.zip" -OutFile $zip
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant() -ne "552191b5754c49a5a20723276a6fc56541ea1922c4c50b7b669022333fc1b40f") { throw "toolchain checksum mismatch" }
+          Expand-Archive $zip -DestinationPath $env:RUNNER_TEMP
+      - name: Probe GNU LLVM CRT startup
+        shell: pwsh
+        run: |
+          $bin = Join-Path $env:RUNNER_TEMP "llvm-mingw-20261104-ucrt-x86_64/bin"
+          $env:CARGO_TARGET_X86_64_PC_WINDOWS_GNULLVM_LINKER = Join-Path $bin "x86_64-w64-mingw32-clang.exe"
+          $env:PATH = "$bin;$env:PATH"
+          cargo +1.95.0 test --manifest-path "$env:RUNNER_TEMP/native-token-probe/Cargo.toml" --target x86_64-pc-windows-gnullvm startup_probe -- --nocapture
           exit $LASTEXITCODE
