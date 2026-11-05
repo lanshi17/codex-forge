@@ -500,7 +500,7 @@ unsafe fn create_token_with_caps_from(
     entries[logon_idx].Attributes = 0;
 
     let mut new_token: HANDLE = std::ptr::null_mut();
-    let flags = DISABLE_MAX_PRIVILEGE | LUA_TOKEN | WRITE_RESTRICTED;
+    let flags = DISABLE_MAX_PRIVILEGE | LUA_TOKEN;
     let ok = CreateRestrictedToken(
         base_token,
         flags,

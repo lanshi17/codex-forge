@@ -166,12 +166,13 @@ fn legacy_tokens_deny_public_acl_mutations_without_a_root_capability() -> Result
         }
     }
 
+    let capability = LocalSid::from_string("S-1-5-21-10-20-30-40")?;
     let fixture = tempfile::tempdir()?;
     unsafe {
         let mut descriptor = std::ptr::null_mut();
         ensure!(
             ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                to_wide("D:P(A;OICI;FA;;;WD)").as_ptr(),
+                to_wide("D:P(A;OICI;FA;;;WD)(A;OICI;GRGX;;;S-1-5-21-10-20-30-40)").as_ptr(),
                 SDDL_REVISION_1,
                 &mut descriptor,
                 std::ptr::null_mut(),
@@ -189,7 +190,6 @@ fn legacy_tokens_deny_public_acl_mutations_without_a_root_capability() -> Result
             GetLastError()
         );
     }
-    let capability = LocalSid::from_string("S-1-5-21-10-20-30-40")?;
     let base = unsafe { OwnedHandle::from_raw_handle(get_current_token_for_restriction()?) };
     for create_token in [
         create_workspace_write_token_with_caps_from,
