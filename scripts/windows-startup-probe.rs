@@ -43,7 +43,7 @@ fn startup_probe() -> Result<()> {
         ensure!(!desktop.is_null(), "create desktop: {}", GetLastError());
         describe(desktop, "desktop")?;
         for use_private in [false, true] {
-            for inherit in [false, true] {
+            for environment in ["inherit", "systemroot", "empty"] {
                 for token in [base, restricted] {
                     let executable = std::env::current_exe()?;
                     let mut command = to_wide(format!("\"{}\" --list", executable.display()));
@@ -51,13 +51,13 @@ fn startup_probe() -> Result<()> {
                     startup.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
                     if use_private { startup.lpDesktop = name.as_ptr().cast_mut(); }
                     let mut info = std::mem::zeroed();
-                    let mut env = to_wide(format!("SystemRoot={}\0", std::env::var("SystemRoot")?));
-                    ensure!(CreateProcessAsUserW(token, ptr::null(), command.as_mut_ptr(), ptr::null(), ptr::null(), 0, CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, if inherit { ptr::null() } else { env.as_mut_ptr().cast() }, ptr::null(), &startup, &mut info) != 0, "spawn: {}", GetLastError());
+                    let mut env = if environment == "empty" { vec![0u16; 2] } else { to_wide(format!("SystemRoot={}\0", std::env::var("SystemRoot")?)) };
+                    ensure!(CreateProcessAsUserW(token, ptr::null(), command.as_mut_ptr(), ptr::null(), ptr::null(), 0, CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, if environment == "inherit" { ptr::null() } else { env.as_mut_ptr().cast() }, ptr::null(), &startup, &mut info) != 0, "spawn: {}", GetLastError());
                     let wait = WaitForSingleObject(info.hProcess, 10000);
                     let mut exit = 0;
                     GetExitCodeProcess(info.hProcess, &mut exit);
                     if wait != WAIT_OBJECT_0 { TerminateProcess(info.hProcess, 99); }
-                    eprintln!("startup private={use_private} inherit_env={inherit} restricted={} wait={wait} exit={exit:#x}", token == restricted);
+                    eprintln!("startup private={use_private} env={environment} restricted={} wait={wait} exit={exit:#x}", token == restricted);
                     CloseHandle(info.hThread); CloseHandle(info.hProcess);
                 }
             }
