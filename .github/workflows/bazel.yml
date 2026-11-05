@@ -15,7 +15,7 @@ jobs:
           persist-credentials: false
       - name: Install fixed Rust toolchain
         shell: pwsh
-        run: rustup toolchain install 1.95.0 --profile minimal
+        run: rustup toolchain install 1.95.0 --profile minimal --target x86_64-pc-windows-gnu
       - name: Generate isolated harness from production sources
         shell: python
         run: |
@@ -51,4 +51,12 @@ jobs:
         shell: pwsh
         run: |
           cargo +1.95.0 test --manifest-path "$env:RUNNER_TEMP/native-token-probe/Cargo.toml" startup_probe -- --nocapture
+          exit $LASTEXITCODE
+      - name: Probe GNU CRT startup
+        shell: pwsh
+        env:
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: C:\msys64\mingw64\bin\gcc.exe
+        run: |
+          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+          cargo +1.95.0 test --manifest-path "$env:RUNNER_TEMP/native-token-probe/Cargo.toml" --target x86_64-pc-windows-gnu startup_probe -- --nocapture
           exit $LASTEXITCODE
