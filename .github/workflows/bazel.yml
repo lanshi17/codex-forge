@@ -1,6 +1,8 @@
 name: Windows native token diagnostic
 on:
   workflow_dispatch:
+  push:
+    branches: [debug/windows-token-probe]
 permissions:
   contents: read
 jobs:
