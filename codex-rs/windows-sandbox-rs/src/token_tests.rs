@@ -228,10 +228,24 @@ fn legacy_tokens_deny_public_acl_mutations_without_a_root_capability() -> Result
             impersonation.as_raw_handle(),
             windows_sys::Win32::Storage::FileSystem::DELETE,
         )?;
+        let checked_delete_child = access_allowed(
+            fixture.path(),
+            impersonation.as_raw_handle(),
+            windows_sys::Win32::Storage::FileSystem::FILE_DELETE_CHILD,
+        )?;
         ensure!(unsafe { ImpersonateLoggedOnUser(impersonation.as_raw_handle()) } != 0);
         let guard = Impersonation;
         let read = std::fs::read_to_string(&file);
         let write = std::fs::OpenOptions::new().write(true).open(&file);
+        use std::os::windows::fs::OpenOptionsExt;
+        let delete_open = std::fs::OpenOptions::new()
+            .access_mode(windows_sys::Win32::Storage::FileSystem::DELETE)
+            .open(&file);
+        let delete_open_result = delete_open
+            .as_ref()
+            .map(|_| ())
+            .map_err(|e| e.raw_os_error());
+        drop(delete_open);
         let delete_file = std::fs::remove_file(&file);
         let delete_directory = std::fs::remove_dir(&directory);
         drop(guard);
@@ -239,7 +253,7 @@ fn legacy_tokens_deny_public_acl_mutations_without_a_root_capability() -> Result
         assert_eq!(read?, "readable");
         assert!(
             write.is_err() && delete_file.is_err() && delete_directory.is_err(),
-            "restricted-token mutations: write={write:?}, delete_file={delete_file:?}, delete_directory={delete_directory:?}; AccessCheck: write={checked_write}, delete={checked_delete}"
+            "restricted-token mutations: write={write:?}, delete_file={delete_file:?}, delete_directory={delete_directory:?}; AccessCheck: write={checked_write}, delete={checked_delete}, delete_child={checked_delete_child}; delete_open={delete_open_result:?}"
         );
         assert_eq!(std::fs::read_to_string(&file)?, "readable");
         assert!(directory.is_dir());
