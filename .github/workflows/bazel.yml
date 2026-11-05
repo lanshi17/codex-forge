@@ -261,6 +261,7 @@ jobs:
               //codex-rs/git-utils:git-utils-unit-tests \
               //codex-rs/shell-command:shell-command-unit-tests \
               //codex-rs/utils/pty:pty-unit-tests \
+              //codex-rs/uds:uds-unit-tests \
               //codex-rs/windows-sandbox-rs:windows-sandbox-rs-unit-tests \
               //codex-rs/file-watcher:file-watcher-unit-tests
           fi

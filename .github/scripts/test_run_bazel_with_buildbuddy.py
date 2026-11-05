@@ -340,6 +340,54 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
             self.assertIn("--local_test_jobs=1", calls[0])
             self.assertIn("--test_env=RUST_TEST_THREADS=1", calls[0])
             self.assertFalse(any("SKIP_FILTERS" in arg for arg in calls[0]))
+            self.assertFalse(any("debuginfo=0" in arg for arg in calls[0]))
+
+            # Exercise the same real wrapper on Unix hosted/local builds. The
+            # compact test profile must never strip release package symbols.
+            for runner_os in ("Linux", "macOS"):
+                for hosted, release in ((True, False), (True, True), (False, False)):
+                    with self.subTest(
+                        runner_os=runner_os, hosted=hosted, release=release
+                    ):
+                        capture.unlink()
+                        args = ["build"]
+                        if release:
+                            args.append("--config=release")
+                        result = subprocess.run(
+                            [
+                                "bash",
+                                str(Path(__file__).with_name("run-bazel-ci.sh")),
+                                "--",
+                                *args,
+                                "--",
+                                "//fixture:test",
+                            ],
+                            env={
+                                "PATH": os.defpath,
+                                "RUNNER_OS": runner_os,
+                                "RUNNER_ENVIRONMENT": "github-hosted"
+                                if hosted
+                                else "self-hosted",
+                                "CODEX_BAZEL_BIN": str(fake_bazel),
+                                "BAZEL_CAPTURE": str(capture),
+                            },
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+                        self.assertEqual(result.returncode, 37, result.stderr)
+                        [call] = [
+                            json.loads(line)
+                            for line in capture.read_text().splitlines()
+                        ]
+                        self.assertEqual("--jobs=4" in call, hosted)
+                        self.assertEqual("--local_test_jobs=1" in call, hosted)
+                        for flag in ("extra_rustc_flag", "extra_exec_rustc_flag"):
+                            self.assertEqual(
+                                f"--@rules_rust//rust/settings:{flag}=-Cdebuginfo=0"
+                                in call,
+                                hosted and not release,
+                            )
 
     @unittest.skipUnless(os.name == "posix", "exercises the Bash CI helper on Unix")
     def test_windows_voice_inputs_are_fixed_and_do_not_reach_linux_rbe(self) -> None:

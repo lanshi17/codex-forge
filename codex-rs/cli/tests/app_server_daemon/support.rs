@@ -1,9 +1,14 @@
 //! Isolated installed-CLI fixtures and PID cleanup for Unix daemon integration tests.
 //! Every test owns its home and CLI selection; only immutable executable contents are shared.
 
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Child;
 use std::process::Command;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::OnceLock;
+use std::sync::Weak;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -18,6 +23,54 @@ pub(super) struct TestDaemon {
     pub(super) home: TempDir,
     pub(super) codex: PathBuf,
     pub(super) unmanaged: Option<Child>,
+    _executable: Arc<PreparedCodex>,
+}
+
+struct PreparedCodex {
+    _directory: TempDir,
+    executable: PathBuf,
+}
+
+// Bazel's executable may live on a different volume from /tmp, so linking it
+// directly into each home can fall back to thirteen multi-GB copies. Prepare
+// one immutable executable on the fixture volume and share only its contents.
+// Every daemon still owns its installation path, state, and processes.
+fn prepared_codex(source: &Path) -> Result<Arc<PreparedCodex>> {
+    static PREPARED: OnceLock<Mutex<Weak<PreparedCodex>>> = OnceLock::new();
+    let mut slot = PREPARED
+        .get_or_init(|| Mutex::new(Weak::new()))
+        .lock()
+        .map_err(|_| anyhow::anyhow!("prepared daemon executable lock poisoned"))?;
+    if let Some(prepared) = slot.upgrade() {
+        return Ok(prepared);
+    }
+    let directory = tempfile::Builder::new()
+        .prefix("codex-daemon-executable-")
+        .tempdir_in("/tmp")?;
+    let executable = directory.path().join("codex");
+    // Translating a separate inode preserves the shared CLI's Rosetta cache.
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    copy_executable(source, &executable)?;
+    #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
+    if std::fs::hard_link(source, &executable).is_err() {
+        copy_executable(source, &executable)?;
+    }
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    ensure!(
+        Command::new(&executable)
+            .env("CODEX_HOME", directory.path())
+            .arg("--version")
+            .output()?
+            .status
+            .success(),
+        "failed to translate managed test executable"
+    );
+    let prepared = Arc::new(PreparedCodex {
+        _directory: directory,
+        executable,
+    });
+    *slot = Arc::downgrade(&prepared);
+    Ok(prepared)
 }
 
 impl TestDaemon {
@@ -37,25 +90,8 @@ impl TestDaemon {
             .join(&release_name)
             .join("bin/codex");
         std::fs::create_dir_all(managed.parent().context("managed bin parent")?)?;
-        // Preserve the installed path without invalidating the shared CLI's Rosetta cache.
-        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-        {
-            copy_executable(&codex_source, &managed)?;
-            // Translate the fixture before timed daemon capability and readiness checks.
-            ensure!(
-                Command::new(&managed)
-                    .env("CODEX_HOME", home.path())
-                    .arg("--version")
-                    .output()?
-                    .status
-                    .success(),
-                "failed to prepare managed test executable"
-            );
-        }
-        #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-        if std::fs::hard_link(&codex_source, &managed).is_err() {
-            copy_executable(&codex_source, &managed)?;
-        }
+        let executable = prepared_codex(&codex_source)?;
+        std::fs::hard_link(&executable.executable, &managed)?;
         std::fs::write(standalone.join("auto-update-version"), &release_name)?;
         std::os::unix::fs::symlink(
             PathBuf::from("releases").join(release_name),
@@ -69,6 +105,7 @@ impl TestDaemon {
             home,
             codex,
             unmanaged: None,
+            _executable: executable,
         })
     }
 

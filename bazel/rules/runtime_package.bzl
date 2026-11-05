@@ -35,7 +35,10 @@ def _release_profile_impl(settings, attr):
         "@rules_rust//rust/settings:codegen_units": 256 if smoke else 4,
         # opt mode selects opt-level=3, which disables assertions and overflow
         # checks by default. Unoptimized release smokes need the explicit opt-out.
-        _RUSTC_FLAGS: settings[_RUSTC_FLAGS] + ([
+        # A caller can compact ordinary CI binaries with debuginfo=0. Package
+        # targets still need line tables for the existing symbol validation and
+        # extraction, even when reached transitively from `test //...`.
+        _RUSTC_FLAGS: settings[_RUSTC_FLAGS] + ["-Cdebuginfo=line-tables-only"] + ([
             "-Copt-level=0",
             "-Cdebug-assertions=no",
         ] if smoke else []),

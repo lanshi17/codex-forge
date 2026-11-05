@@ -428,6 +428,26 @@ else
   # Hosted machines already retain declared outputs in output_base. A second
   # complete copy in the disk cache exhausts their cold-build disk budget.
   bazel_run_args+=(--disk_cache=)
+  if [[ "${RUNNER_ENVIRONMENT:-}" == "github-hosted" && "${RUNNER_OS:-}" != "Windows" &&
+        ( "${bazel_args[0]}" == "build" || "${bazel_args[0]}" == "test" ) ]]; then
+    # The upstream defaults assume remote execution. Bound cold local builds
+    # on hosted machines, retaining all targets and all runtime assertions.
+    bazel_run_args+=(--jobs=4 --local_test_jobs=1)
+    release_build=0
+    for arg in "${bazel_args[@]}"; do
+      if [[ "$arg" == "--config=release" ]]; then
+        release_build=1
+      fi
+    done
+    if [[ "$release_build" == 0 ]]; then
+      # DWARF dominates the many linked test binaries. Keep debug assertions
+      # and optimization unchanged; release packaging still retains symbols.
+      bazel_run_args+=(
+        --@rules_rust//rust/settings:extra_rustc_flag=-Cdebuginfo=0
+        --@rules_rust//rust/settings:extra_exec_rustc_flag=-Cdebuginfo=0
+      )
+    fi
+  fi
   if [[ "${bazel_args[0]}" == "test" ]]; then
     bazel_run_args+=("--test_env=INSTA_UPDATE=no")
   fi
