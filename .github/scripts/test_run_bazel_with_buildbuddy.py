@@ -359,9 +359,7 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
                         if release:
                             args.append("--config=release")
                         if verify_release:
-                            args.append(
-                                "--build_metadata=TAG_job=verify-release-build"
-                            )
+                            args.append("--build_metadata=TAG_job=verify-release-build")
                         result = subprocess.run(
                             [
                                 "bash",
