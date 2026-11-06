@@ -373,7 +373,7 @@ fn default_objects_deny_other_logons_even_with_the_same_owner() -> Result<()> {
         ensure!(
             CreateRestrictedToken(
                 base_raw,
-                DISABLE_MAX_PRIVILEGE | LUA_TOKEN | WRITE_RESTRICTED,
+                DISABLE_MAX_PRIVILEGE | LUA_TOKEN,
                 1,
                 &disabled,
                 0,
