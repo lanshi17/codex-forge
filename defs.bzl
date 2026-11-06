@@ -5,12 +5,17 @@ load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_proc_mac
 load("//bazel/rules/testing:foreign_platform_binary.bzl", "foreign_platform_binary")
 load("//bazel/rules/testing/wine:wine_runtime.bzl", "WINE_TEST_TARGET_COMPATIBLE_WITH", "wine_test_runtime")
 
-# Reserve 8 MiB of stack on Windows and statically link the CRT on MSVC.
+# Reserve 8 MiB of stack on Windows and statically link the CRT for every
+# Windows Rust executable. The gnullvm test and CLI binaries must start with
+# the deliberately minimal legacy child environment; carrying a toolchain CRT
+# DLL dependency there makes restricted-token startup fail with STATUS_DLL_INIT_FAILED.
 # V8's x64 allocator shim defines malloc/free; importing them from dynamic UCRT
 # as well replaces the import thunks during linking.
 WINDOWS_GNULLVM_RUSTC_LINK_FLAGS = [
     "-C",
     "link-arg=-Wl,--stack,8388608",  # 8 MiB
+    "-C",
+    "target-feature=+crt-static",
 ]
 
 WINDOWS_RUSTC_LINK_FLAGS = select({
