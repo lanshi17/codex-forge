@@ -358,8 +358,9 @@ pub(crate) async fn spawn_windows_sandbox_session_legacy(
     if !common.permissions.has_full_disk_read_access() {
         anyhow::bail!("Restricted read-only access requires the elevated Windows sandbox backend");
     }
-    // WRITE_RESTRICTED tokens consult restricting SIDs only for writes, so this
-    // backend cannot make capability-SID deny-read ACLs authoritative.
+    // The legacy direct launcher is retained only for historical setup code;
+    // runtime callers are routed through the elevated backend. Keep rejecting
+    // deny-read overrides here rather than silently running an unverified path.
     if !additional_deny_read_paths.is_empty() {
         anyhow::bail!("deny-read overrides require the elevated Windows sandbox backend");
     }

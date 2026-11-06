@@ -171,7 +171,7 @@ fn legacy_tokens_deny_public_acl_mutations_without_a_root_capability() -> Result
         let mut descriptor = std::ptr::null_mut();
         ensure!(
             ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                to_wide("D:P(A;OICI;FA;;;WD)").as_ptr(),
+                to_wide("D:P(A;OICI;FA;;;WD)(A;OICI;GRGX;;;S-1-5-21-10-20-30-40)",).as_ptr(),
                 SDDL_REVISION_1,
                 &mut descriptor,
                 std::ptr::null_mut(),

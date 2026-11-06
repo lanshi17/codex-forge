@@ -278,12 +278,16 @@ pub fn run_legacy_setup_preflight(
     env_map: &HashMap<String, String>,
     codex_home: &Path,
 ) -> anyhow::Result<()> {
-    codex_windows_sandbox::run_windows_sandbox_legacy_preflight(
+    // Keep the historical setup hook for callers that still select
+    // `unelevated`, but provision and refresh the account-backed elevated
+    // backend. The direct restricted-token preflight is retired because it
+    // cannot enforce parent-directory FILE_DELETE_CHILD checks.
+    prepare_elevated_sandbox(
         permission_profile,
         workspace_roots,
-        codex_home,
         command_cwd,
         env_map,
+        codex_home,
     )
 }
 

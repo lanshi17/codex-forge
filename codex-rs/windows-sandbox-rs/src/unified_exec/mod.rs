@@ -2,7 +2,7 @@
 //!
 //! This module is the thin orchestration layer for Windows unified-exec sessions.
 //! Backend-specific mechanics live in sibling modules:
-//! - `backends::legacy` adapts the direct restricted-token spawn path into a live session.
+//! - `backends::legacy` is test-only coverage for the retired direct restricted-token path.
 //! - `backends::elevated` adapts the elevated command-runner IPC path into the same session API.
 //! - `backends::windows_common` holds the small shared Windows backend helpers
 //!   used by both.
@@ -56,7 +56,24 @@ pub(crate) async fn spawn_windows_sandbox_session_with_desktop(
     request: WindowsSandboxSessionRequest<'_>,
     private_desktop_name: Option<String>,
 ) -> Result<SpawnedProcess> {
-    if matches!(request.windows_sandbox_level, WindowsSandboxLevel::Elevated) {
+    // Restricted-token requests are migrated to the account-backed elevated
+    // runner. The direct launcher remains available only to focused unit tests;
+    // no runtime path may reach it because FILE_DELETE_CHILD can bypass
+    // capability checks through a parent directory.
+    if matches!(
+        request.windows_sandbox_level,
+        WindowsSandboxLevel::Elevated | WindowsSandboxLevel::RestrictedToken
+    ) {
+        if request.windows_sandbox_level == WindowsSandboxLevel::RestrictedToken {
+            if request.proxy_enforced {
+                bail!("managed networking requires the elevated Windows sandbox backend");
+            }
+            if request.network_proxy_restricting_sid.is_some() {
+                bail!(
+                    "network proxy restricting SID requires the elevated Windows sandbox backend"
+                );
+            }
+        }
         backends::elevated::spawn_windows_sandbox_session_elevated_for_permission_profile(
             request.permission_profile,
             request.workspace_roots,
@@ -79,27 +96,7 @@ pub(crate) async fn spawn_windows_sandbox_session_with_desktop(
         )
         .await
     } else {
-        if request.proxy_enforced {
-            bail!("managed networking requires the elevated Windows sandbox backend");
-        }
-        if request.network_proxy_restricting_sid.is_some() {
-            bail!("network proxy restricting SID requires the elevated Windows sandbox backend");
-        }
-        backends::legacy::spawn_windows_sandbox_session_legacy(
-            request.permission_profile,
-            request.workspace_roots,
-            request.codex_home,
-            request.command,
-            request.cwd,
-            request.env_map,
-            request.timeout_ms,
-            request.deny_read_paths_override,
-            request.deny_write_paths_override,
-            request.tty,
-            request.stdin_open,
-            private_desktop_name,
-        )
-        .await
+        bail!("Windows sandbox is unavailable for this sandbox level");
     }
 }
 
@@ -117,7 +114,7 @@ pub async fn spawn_windows_sandbox_session_legacy(
     tty: bool,
     stdin_open: bool,
 ) -> Result<SpawnedProcess> {
-    backends::legacy::spawn_windows_sandbox_session_legacy(
+    let _ = (
         permission_profile,
         workspace_roots,
         codex_home,
@@ -129,9 +126,8 @@ pub async fn spawn_windows_sandbox_session_legacy(
         additional_deny_write_paths,
         tty,
         stdin_open,
-        /*private_desktop_name*/ None,
-    )
-    .await
+    );
+    bail!("legacy Windows sandbox backend is disabled; use the elevated Windows sandbox backend")
 }
 
 #[allow(clippy::too_many_arguments)]

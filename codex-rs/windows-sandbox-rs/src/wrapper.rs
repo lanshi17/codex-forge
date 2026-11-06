@@ -11,14 +11,10 @@ use std::path::PathBuf;
 
 use crate::cap::load_or_create_cap_sids;
 use crate::desktop::DesktopPolicy;
-use crate::desktop::LaunchDesktop;
 use crate::desktop::shared_private_desktop_for_user;
 use crate::identity::require_sandbox_account;
 use crate::setup::effective_write_roots_for_permissions;
 use crate::spawn_prep::SpawnPrepOptions;
-use crate::spawn_prep::legacy_session_capability_roots;
-use crate::spawn_prep::prepare_legacy_session_security;
-use crate::spawn_prep::prepare_legacy_spawn_context;
 use crate::spawn_prep::prepare_spawn_context_common;
 use crate::spawn_prep::root_capability_sids;
 use anyhow::Context;
@@ -28,7 +24,6 @@ use anyhow::bail;
 use codex_protocol::config_types::WindowsSandboxLevel;
 use codex_protocol::models::PermissionProfile;
 use codex_utils_absolute_path::AbsolutePathBuf;
-use windows_sys::Win32::Foundation::CloseHandle;
 
 pub const CODEX_WINDOWS_SANDBOX_ARG1: &str = "--run-as-windows-sandbox";
 
@@ -101,7 +96,10 @@ pub fn create_windows_sandbox_command_args_for_permission_profile(
             .iter()
             .map(AbsolutePathBuf::to_path_buf)
             .collect::<Vec<_>>();
-        if windows_sandbox_level == WindowsSandboxLevel::Elevated {
+        if matches!(
+            windows_sandbox_level,
+            WindowsSandboxLevel::Elevated | WindowsSandboxLevel::RestrictedToken
+        ) {
             let common = prepare_spawn_context_common(
                 permission_profile,
                 workspace_roots,
@@ -168,42 +166,7 @@ pub fn create_windows_sandbox_command_args_for_permission_profile(
                 common.logs_base_dir.as_deref(),
             )?
         } else {
-            let common = prepare_legacy_spawn_context(
-                permission_profile,
-                workspace_roots,
-                codex_home,
-                command_cwd.as_path(),
-                &mut desktop_env,
-                &command,
-                SpawnPrepOptions {
-                    inherit_path: false,
-                    add_git_safe_directory: false,
-                },
-            )?;
-            let capability_roots = legacy_session_capability_roots(
-                &common.permissions,
-                &common.current_dir,
-                &desktop_env,
-                codex_home,
-            );
-            let security = prepare_legacy_session_security(
-                common.uses_write_capabilities,
-                codex_home,
-                command_cwd.as_path(),
-                capability_roots,
-            )?;
-            let desktop_name = LaunchDesktop::shared_legacy_name(
-                &common.permissions,
-                &common.current_dir,
-                &desktop_env,
-                &security,
-                &deny_write_paths,
-                common.logs_base_dir.as_deref(),
-            );
-            unsafe {
-                CloseHandle(security.h_token);
-            }
-            desktop_name?
+            bail!("Windows sandbox is unavailable for this sandbox level")
         }
     };
     args.push(PRIVATE_DESKTOP_NAME_FLAG.to_string());

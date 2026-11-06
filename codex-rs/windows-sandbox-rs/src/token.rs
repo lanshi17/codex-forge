@@ -479,10 +479,11 @@ unsafe fn create_token_with_caps_from(
     let mut logon_sid_bytes = get_logon_sid_bytes(base_token)?;
     let psid_logon = logon_sid_bytes.as_mut_ptr() as *mut c_void;
 
-    // Restrict writes to capabilities, explicit additional identities and the
-    // logon. Everyone must not satisfy the restricting pass: world-writable
-    // host ACLs would otherwise grant writes outside the selected roots.
-    // WRITE_RESTRICTED leaves ordinary read access unchanged.
+    // Apply the restricting SID set to every filesystem access. Everyone must
+    // not satisfy the restricting pass: world-writable host ACLs would
+    // otherwise grant writes outside the selected roots, including the parent
+    // directory FILE_DELETE_CHILD operation. Read access is granted explicitly
+    // by elevated setup on the configured roots.
     // Exact order: Capabilities..., ExtraRestricting..., Logon
     let mut entries: Vec<SID_AND_ATTRIBUTES> =
         vec![std::mem::zeroed(); psid_capabilities.len() + extra_restricting_sids.len() + 1];
@@ -500,7 +501,7 @@ unsafe fn create_token_with_caps_from(
     entries[logon_idx].Attributes = 0;
 
     let mut new_token: HANDLE = std::ptr::null_mut();
-    let flags = DISABLE_MAX_PRIVILEGE | LUA_TOKEN | WRITE_RESTRICTED;
+    let flags = DISABLE_MAX_PRIVILEGE | LUA_TOKEN;
     let ok = CreateRestrictedToken(
         base_token,
         flags,
