@@ -1,6 +1,10 @@
 use forge_agent_protocol::ExecutionRequest;
-use forge_domain::{AgentSession, BackendKind, ExecutionReport};
-use std::{future::Future, path::PathBuf, pin::Pin};
+use forge_domain::AgentSession;
+use forge_domain::BackendKind;
+use forge_domain::ExecutionReport;
+use std::future::Future;
+use std::path::PathBuf;
+use std::pin::Pin;
 use thiserror::Error;
 
 pub type BackendFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, BackendError>> + Send + 'a>>;

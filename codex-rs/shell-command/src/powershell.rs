@@ -8,6 +8,22 @@ use crate::shell_detect::detect_shell_type;
 
 const POWERSHELL_FLAGS: &[&str] = &["-nologo", "-noprofile", "-command", "-c"];
 
+/// Piped probes and AST parsers must not attach to the caller's console.
+pub(crate) fn non_interactive_powershell_command(
+    executable: impl AsRef<std::ffi::OsStr>,
+) -> std::process::Command {
+    let command = std::process::Command::new(executable);
+    #[cfg(windows)]
+    let command = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut command = command;
+        command.creation_flags(CREATE_NO_WINDOW);
+        command
+    };
+    command
+}
+
 /// Prefixed command for powershell shell calls to request UTF-8 console output.
 pub const UTF8_OUTPUT_PREFIX: &str =
     "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n";
@@ -105,7 +121,7 @@ pub fn try_find_powershell_executable_blocking() -> Option<AbsolutePathBuf> {
 /// has installed pwsh.exe, it may not be available in the system PATH, in which
 /// case we attempt to locate it via other means.
 pub fn try_find_pwsh_executable_blocking() -> Option<AbsolutePathBuf> {
-    if let Some(ps_home) = std::process::Command::new("cmd")
+    if let Some(ps_home) = non_interactive_powershell_command("cmd")
         .args(["/C", "pwsh", "-NoProfile", "-Command", "$PSHOME"])
         .output()
         .ok()
@@ -150,7 +166,7 @@ fn try_find_powershellish_executable_in_path(candidates: &[&str]) -> Option<Abso
 
 fn is_powershellish_executable_available(powershell_or_pwsh_exe: &std::path::Path) -> bool {
     // This test works for both powershell.exe and pwsh.exe.
-    std::process::Command::new(powershell_or_pwsh_exe)
+    non_interactive_powershell_command(powershell_or_pwsh_exe)
         .args(["-NoLogo", "-NoProfile", "-Command", "Write-Output ok"])
         .output()
         .map(|output| output.status.success())

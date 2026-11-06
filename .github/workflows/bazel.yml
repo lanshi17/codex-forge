@@ -20,15 +20,15 @@ jobs:
     # signal without putting PR latency back on the critical path. When
     # Code-mode unit tests run on every Bazel target. When authenticated RBE
     # is available, the Windows-cross shards exercise the source-built V8 path.
-    timeout-minutes: 30
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
         include:
           # macOS
-          - os: macos-15-xlarge
+          - os: macos-15
             target: aarch64-apple-darwin
-          - os: macos-15-xlarge
+          - os: macos-15
             target: x86_64-apple-darwin
 
           # Linux
@@ -60,6 +60,8 @@ jobs:
         id: prepare_bazel
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
+          windows-voice-tools: "true"
           target: ${{ matrix.target }}
           cache-scope: bazel-${{ github.job }}
 
@@ -115,6 +117,32 @@ jobs:
             -- \
             "${bazel_targets[@]}"
 
+      - name: Verify rollout alternate-group preservation with host group mappings
+        if: runner.os == 'Linux'
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Linux sandbox namespaces can map only the primary group. Exercise
+          # the ownership fixture again with the runner's real supplementary
+          # groups, and require actual execution rather than a precondition skip.
+          ./.github/scripts/run-bazel-ci.sh --remote-download-toplevel -- build -- \
+            //codex-rs/rollout:rollout-unit-tests-bin
+          executable="$(./.github/scripts/run-bazel-ci.sh -- cquery --output=files -- \
+            //codex-rs/rollout:rollout-unit-tests-bin | grep -E '^(/|bazel-out/)')"
+          test -x "${executable}"
+          log="$(mktemp)"
+          trap 'rm -f "${log}"' EXIT
+          "${executable}" --exact \
+            compression::tests::worker_preserves_alternate_group_through_materialization \
+            --nocapture 2>&1 | tee "${log}"
+          if grep -q 'skipping ownership regression' "${log}"; then
+            echo '::error::Hosted ownership regression requires an alternate mapped group'
+            exit 1
+          fi
+          grep -q '^test result: ok\. 1 passed; 0 failed;' "${log}"
+
       - name: Upload Bazel execution logs
         if: always() && !cancelled()
         continue-on-error: true
@@ -142,7 +170,7 @@ jobs:
     # Split the Windows Bazel test leg across separate Windows hosts. Jobs with
     # BuildBuddy credentials use Linux RBE for build actions; test execution
     # remains on a Windows runner.
-    timeout-minutes: 30
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -151,9 +179,7 @@ jobs:
           - 2
           - 3
           - 4
-    runs-on:
-      group: ${{ github.event.repository.name }}-runners
-      labels: ${{ github.event.repository.name }}-windows-x64
+    runs-on: windows-latest
     name: Bazel test on windows-latest for x86_64-pc-windows-gnullvm shard ${{ matrix.shard }}/4
     environment:
       name: bazel
@@ -178,6 +204,8 @@ jobs:
         id: prepare_bazel
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
+          windows-voice-tools: "true"
           target: x86_64-pc-windows-gnullvm
           # Reuse the former monolithic Windows test cache for restores. Do
           # not save it from every shard below; duplicate uploads would sit on
@@ -217,11 +245,29 @@ jobs:
             --build_metadata=TAG_windows_test_shard=${BAZEL_TEST_SHARD}
           )
 
+          bazel_wrapper_args=(
+            --print-failed-action-summary
+            --print-failed-test-logs
+            --windows-cross-compile
+            --remote-download-toplevel
+          )
+          if [[ "${BAZEL_TEST_SHARD}" == "4" ]]; then
+            # Surface process, console and sandbox failures before compiling the full
+            # agent runtime and UI. The complete shard still runs below and
+            # reuses successful preflight test results from the same cache.
+            ./.github/scripts/run-bazel-ci.sh \
+              "${bazel_wrapper_args[@]}" \
+              -- "${bazel_test_args[@]}" -- \
+              //codex-rs/git-utils:git-utils-unit-tests \
+              //codex-rs/shell-command:shell-command-unit-tests \
+              //codex-rs/utils/pty:pty-unit-tests \
+              //codex-rs/uds:uds-unit-tests \
+              //codex-rs/windows-sandbox-rs:windows-sandbox-rs-unit-tests \
+              //codex-rs/file-watcher:file-watcher-unit-tests
+          fi
+
           ./.github/scripts/run-bazel-ci.sh \
-            --print-failed-action-summary \
-            --print-failed-test-logs \
-            --windows-cross-compile \
-            --remote-download-toplevel \
+            "${bazel_wrapper_args[@]}" \
             -- \
             "${bazel_test_args[@]}" \
             -- \
@@ -263,9 +309,7 @@ jobs:
     # it a larger timeout. Also allow manual runs for native toolchain changes.
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     timeout-minutes: 40
-    runs-on:
-      group: ${{ github.event.repository.name }}-runners
-      labels: ${{ github.event.repository.name }}-windows-x64
+    runs-on: windows-latest
     name: Bazel test on windows-latest for x86_64-pc-windows-msvc (native main)
     environment:
       name: bazel
@@ -280,6 +324,8 @@ jobs:
         id: prepare_bazel
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
+          windows-voice-tools: "true"
           target: x86_64-pc-windows-msvc
           cache-scope: bazel-${{ github.job }}
 
@@ -340,7 +386,7 @@ jobs:
         uses: ./.github/actions/check-clean-worktree
 
   clippy:
-    timeout-minutes: 30
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -351,13 +397,11 @@ jobs:
           # that the Bazel test job uses.
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-          - os: macos-15-xlarge
+          - os: macos-15
             target: aarch64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-gnullvm
-            runs_on:
-              group: ${{ github.event.repository.name }}-runners
-              labels: ${{ github.event.repository.name }}-windows-x64
+            runs_on: windows-latest
     runs-on: ${{ matrix.runs_on || matrix.os }}
     name: Bazel clippy on ${{ matrix.os }} for ${{ matrix.target }}
     environment:
@@ -373,6 +417,8 @@ jobs:
         id: prepare_bazel
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
+          windows-voice-tools: "true"
           target: ${{ matrix.target }}
           cache-scope: bazel-${{ github.job }}
 
@@ -400,14 +446,13 @@ jobs:
             # Keep this aligned with the fast Windows Bazel test job: use
             # Linux RBE for clippy build actions while targeting Windows
             # gnullvm. Fork/community PRs without the BuildBuddy secret fall
-            # back inside `run-bazel-ci.sh` to the previous local Windows MSVC
-            # host-platform shape.
+            # back inside `run-bazel-ci.sh` to local Windows execution with
+            # gnullvm host tools and the same gnullvm target.
             bazel_wrapper_args+=(--windows-cross-compile)
             bazel_target_list_args+=(--windows-cross-compile)
             if [[ -z "${BUILDBUDDY_API_KEY:-}" ]]; then
-              # The fork fallback can see incompatible explicit Windows-cross
-              # internal test binaries in the generated target list. Preserve
-              # the old local-fallback behavior there.
+              # Query results can include platform-incompatible explicit test
+              # helpers; Bazel still checks every compatible gnullvm target.
               bazel_clippy_args+=(--skip_incompatible_explicit_targets)
             fi
           fi
@@ -451,20 +496,18 @@ jobs:
         uses: ./.github/actions/check-clean-worktree
 
   verify-release-build:
-    timeout-minutes: 30
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-          - os: macos-15-xlarge
+          - os: macos-15
             target: aarch64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-gnullvm
-            runs_on:
-              group: ${{ github.event.repository.name }}-runners
-              labels: ${{ github.event.repository.name }}-windows-x64
+            runs_on: windows-latest
     runs-on: ${{ matrix.runs_on || matrix.os }}
     name: Verify release build on ${{ matrix.os }} for ${{ matrix.target }}
     environment:
@@ -480,6 +523,8 @@ jobs:
         id: prepare_bazel
         uses: ./.github/actions/prepare-bazel-ci
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
+          windows-voice-tools: "true"
           target: ${{ matrix.target }}
           cache-scope: bazel-${{ github.job }}
 
@@ -507,8 +552,8 @@ jobs:
             # This is build-only signal, so use the same Linux-RBE
             # cross-compile path as the fast Windows test and clippy jobs.
             # Fork/community PRs without the BuildBuddy secret fall back
-            # inside `run-bazel-ci.sh` to the previous local Windows MSVC
-            # host-platform shape.
+            # inside `run-bazel-ci.sh` to local Windows execution with gnullvm
+            # host tools and the same gnullvm target.
             bazel_wrapper_args+=(--windows-cross-compile)
           fi
 

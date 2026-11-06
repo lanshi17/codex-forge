@@ -40,10 +40,14 @@ rust_binary(
     visibility = ["//visibility:private"],
 )
 
+# Each body initializes a complete Wine prefix. Bound libtest concurrency and
+# reserve matching CPU capacity while retaining the short target timeout.
 wine_rust_test(
     name = "wine-test-support-unit-tests",
     timeout = "short",
+    args = ["--test-threads=2"],
     crate = ":wine_test_support",
+    tags = ["cpu:2"],
     windows_binaries = {
         "wine-smoke": ":windows-smoke",
     },

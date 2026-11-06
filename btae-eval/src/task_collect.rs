@@ -1,11 +1,12 @@
 //! Plan-bound isolated task collection; engineering evidence only.
-use crate::{PlannedRun, dsh_live::LiveLimits};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    error::Error,
-    path::{Path, PathBuf},
-};
+use crate::PlannedRun;
+use crate::dsh_live::LiveLimits;
+use serde::Deserialize;
+use serde::Serialize;
+use std::collections::BTreeMap;
+use std::error::Error;
+use std::path::Path;
+use std::path::PathBuf;
 pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 pub struct TaskRequest {
     pub manifest: PathBuf,
@@ -38,18 +39,20 @@ pub struct TaskRecord {
     pub billing_verified: bool,
 }
 
-use crate::{
-    Manifest, digest,
-    dsh_live::run_live,
-    plan,
-    runner::{export_seed, inventory, snapshot},
-};
-use std::{
-    fs::{self, OpenOptions},
-    io::{self, Write},
-    os::unix::fs::{DirBuilderExt, OpenOptionsExt},
-    path::Component,
-};
+use crate::Manifest;
+use crate::digest;
+use crate::dsh_live::run_live;
+use crate::plan;
+use crate::runner::export_seed;
+use crate::runner::inventory;
+use crate::runner::snapshot;
+use std::fs::OpenOptions;
+use std::fs::{self};
+use std::io::Write;
+use std::io::{self};
+use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::Component;
 
 fn invalid(message: &str) -> Box<dyn Error + Send + Sync> {
     io::Error::new(io::ErrorKind::InvalidData, message).into()

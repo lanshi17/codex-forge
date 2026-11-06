@@ -1,6 +1,7 @@
 //! Dependency validation only; execution concurrency is a later milestone.
 use forge_domain::TaskId;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]

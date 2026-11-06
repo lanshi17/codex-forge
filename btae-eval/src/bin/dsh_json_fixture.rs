@@ -1,11 +1,11 @@
 //! Synthetic JSONL producer for the live process supervisor tests.
 use clap::Parser;
-use std::{
-    io::{self, Read, Write},
-    process::ExitCode,
-    thread,
-    time::Duration,
-};
+use std::io::Read;
+use std::io::Write;
+use std::io::{self};
+use std::process::ExitCode;
+use std::thread;
+use std::time::Duration;
 #[derive(Parser)]
 struct Args {
     #[arg(long)]
@@ -49,8 +49,11 @@ fn main() -> ExitCode {
         "malformed" => {
             println!("not-json");
             io::stdout().flush().unwrap();
-            thread::sleep(Duration::from_secs(2));
-            ExitCode::SUCCESS
+            // The supervisor must terminate us; natural exit must not satisfy
+            // the protocol-error cleanup test.
+            loop {
+                thread::sleep(Duration::from_millis(10));
+            }
         }
         "env" => {
             if std::env::var_os("HOME").is_some() {

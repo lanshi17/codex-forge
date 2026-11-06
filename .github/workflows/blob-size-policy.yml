@@ -11,8 +11,22 @@ jobs:
       contents: read
     steps:
       - uses: openai/fence@e017427978b91977d79a3023842166ab79b5b816 # pin@v0.12.2
+        id: fence
         with:
           mode: audit
+      - name: Diagnose Fence launch permissions
+        if: failure() && steps.fence.outcome == 'failure'
+        shell: bash
+        run: |
+          # Read-only host evidence; the failed Fence step still fails this job.
+          findmnt --target /run --output TARGET,FSTYPE,OPTIONS
+          for entry in /run /run/fence-launcher \
+            "/run/fence-launcher/fence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "/run/fence-launcher/fence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/action/bin/fence"; do
+            if [[ -e "$entry" ]]; then
+              stat --format='%a %U %G %n' "$entry"
+            fi
+          done
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0

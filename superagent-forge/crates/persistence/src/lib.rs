@@ -1,5 +1,6 @@
 //! Durable storage port. No in-memory implementation is presented as SQLite.
-use forge_domain::{Task, TaskId};
+use forge_domain::Task;
+use forge_domain::TaskId;
 use std::io;
 
 pub const INITIAL_SCHEMA: &str = include_str!("../migrations/001_initial.sql");

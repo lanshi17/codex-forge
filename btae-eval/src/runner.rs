@@ -1,23 +1,36 @@
 //! Linux-only, no credentials or model calls. This protocol is not a DSH adapter.
-use crate::{Manifest, PlannedRun, digest, plan};
+use crate::Manifest;
+use crate::PlannedRun;
+use crate::digest;
+use crate::plan;
 use clap::ValueEnum;
-use nix::{
-    sys::signal::{Signal, killpg},
-    unistd::Pid,
-};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    error::Error,
-    fs::{self, File, OpenOptions},
-    io::{self, Read, Write},
-    os::unix::{fs::PermissionsExt, process::CommandExt},
-    path::{Component, Path, PathBuf},
-    process::{Child, Command, ExitStatus, Stdio},
-    sync::mpsc,
-    thread,
-    time::{Duration, Instant},
-};
+use nix::sys::signal::Signal;
+use nix::sys::signal::killpg;
+use nix::unistd::Pid;
+use serde::Deserialize;
+use serde::Serialize;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::error::Error;
+use std::fs::File;
+use std::fs::OpenOptions;
+use std::fs::{self};
+use std::io::Read;
+use std::io::Write;
+use std::io::{self};
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::process::CommandExt;
+use std::path::Component;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Child;
+use std::process::Command;
+use std::process::ExitStatus;
+use std::process::Stdio;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+use std::time::Instant;
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -911,6 +924,20 @@ pub fn verify_diagnostic(directory: &Path, manifest_path: &Path) -> Result<Diagn
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn setup_deadline_without_a_worker_is_still_a_timeout() {
+        let limits = Limits {
+            wall_ms: 200,
+            ..Default::default()
+        };
+        for elapsed_ms in [200, 250] {
+            assert_eq!(
+                final_outcome(&[], &Counters::default(), &limits, elapsed_ms).unwrap(),
+                ProcessOutcome::TimedOut
+            );
+        }
+    }
+
     #[test]
     fn sealing_work_counts_toward_deadline_without_overwriting_other_stop_causes() {
         let limits = Limits {

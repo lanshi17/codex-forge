@@ -466,10 +466,45 @@ async fn conpty_delivers_input_to_foreground_children() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn conpty_ctrl_c_interrupts_powershell_foreground_child() -> anyhow::Result<()> {
+    // The ignored-Ctrl-C flag is inherited across CreateProcess, including
+    // pseudoconsole clients. Isolate this test from the runner's signal policy
+    // without changing the process-wide policy of concurrent callers/tests.
+    if std::env::var_os("CODEX_PTY_CTRL_C_PROBE").is_none() {
+        let output = std::process::Command::new(std::env::current_exe()?)
+            .args([
+                "--exact",
+                "tests::windows_tests::conpty_ctrl_c_interrupts_powershell_foreground_child",
+                "--nocapture",
+            ])
+            .env("CODEX_PTY_CTRL_C_PROBE", "1")
+            .creation_flags(winapi::um::winbase::CREATE_NEW_CONSOLE)
+            .output()?;
+        anyhow::ensure!(
+            output.status.success(),
+            "isolated Ctrl-C probe failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return Ok(());
+    }
+    let reset = unsafe { winapi::um::consoleapi::SetConsoleCtrlHandler(None, 0) };
+    anyhow::ensure!(
+        reset != 0,
+        "reset Ctrl-C policy: {}",
+        std::io::Error::last_os_error()
+    );
+
     let Some(program) = find_powershell() else {
         return Ok(());
     };
-    let args = vec!["-NoLogo".to_string(), "-NoProfile".to_string()];
+    let prompt = "__CODEX_CTRL_C_READY__> ";
+    let args = vec![
+        "-NoLogo".to_string(),
+        "-NoProfile".to_string(),
+        "-NoExit".to_string(),
+        "-Command".to_string(),
+        format!("function prompt {{ '{prompt}' }}"),
+    ];
     let env: HashMap<String, String> = std::env::vars().collect();
     let spawned = spawn_pty_process(
         &program,
@@ -483,11 +518,23 @@ async fn conpty_ctrl_c_interrupts_powershell_foreground_child() -> anyhow::Resul
     .await?;
     let (session, mut output_rx, exit_rx) = combine_spawned_output(spawned);
     let writer = session.writer_sender();
+    wait_for_output_contains(&mut output_rx, prompt, /*timeout_ms*/ 10_000).await?;
     writer.send(b"ping.exe -4 -t localhost\n".to_vec()).await?;
-    wait_for_output_contains(&mut output_rx, "127.0.0.1", /*timeout_ms*/ 10_000).await?;
+    // The banner contains the address before ping has entered its foreground
+    // receive loop. Wait for an actual reply before sending the interrupt.
+    wait_for_output_contains(&mut output_rx, "TTL=", /*timeout_ms*/ 10_000).await?;
 
     writer.send(vec![0x03]).await?;
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    // PowerShell can still discard input after ping's signal handler exits.
+    // Collect through its next prompt, including statistics in the same chunk,
+    // before sending the command that proves the shell recovered.
+    let interrupted =
+        wait_for_output_contains(&mut output_rx, prompt, /*timeout_ms*/ 10_000).await?;
+    anyhow::ensure!(
+        String::from_utf8_lossy(&interrupted).contains("Ping statistics"),
+        "ping did not report its interruption: {:?}",
+        String::from_utf8_lossy(&interrupted),
+    );
     writer.send(b"cmd.exe /D /C ver\n".to_vec()).await?;
     let mut output = wait_for_output_contains(
         &mut output_rx,

@@ -285,6 +285,212 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 37, result.stderr)
 
+    @unittest.skipUnless(os.name == "posix", "exercises the Bash CI helper on Unix")
+    def test_keyless_windows_failure_logs_use_the_test_target_platform(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            capture = Path(temp_dir) / "args.jsonl"
+            testlogs = Path(temp_dir) / "testlogs"
+            test_log = testlogs / "fixture" / "test" / "test.log"
+            test_log.parent.mkdir(parents=True)
+            test_log.write_text("fixture failure details\n", encoding="utf-8")
+            fake_bazel = Path(temp_dir) / "fake-bazel"
+            fake_bazel.write_text(
+                f"#!{sys.executable}\n"
+                "import json, os, sys\n"
+                "with open(os.environ['BAZEL_CAPTURE'], 'a') as f:\n"
+                "    f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                "if 'info' in sys.argv:\n"
+                "    print(os.environ['FIXTURE_TESTLOGS'])\n"
+                "else:\n"
+                "    print('FAIL: //fixture:test')\n"
+                "    sys.exit(37)\n",
+                encoding="utf-8",
+            )
+            fake_bazel.chmod(0o755)
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(Path(__file__).with_name("run-bazel-ci.sh")),
+                    "--windows-cross-compile",
+                    "--print-failed-test-logs",
+                    "--",
+                    "test",
+                    "--",
+                    "//fixture:test",
+                ],
+                env={
+                    "PATH": os.defpath,
+                    "RUNNER_OS": "Windows",
+                    "CODEX_BAZEL_BIN": str(fake_bazel),
+                    "BAZEL_CAPTURE": str(capture),
+                    "FIXTURE_TESTLOGS": str(testlogs),
+                    "CODEX_BAZEL_WINDOWS_PATH": r"C:\Windows",
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 37, result.stderr)
+            self.assertIn("fixture failure details", result.stdout)
+            calls = [json.loads(line) for line in capture.read_text().splitlines()]
+            self.assertEqual(len(calls), 2)
+            for args in calls:
+                self.assertIn("--platforms=//:windows_x86_64_gnullvm", args)
+                self.assertIn("--host_platform=//:local_windows", args)
+            self.assertIn("--local_test_jobs=1", calls[0])
+            self.assertIn("--test_env=RUST_TEST_THREADS=1", calls[0])
+            self.assertFalse(any("SKIP_FILTERS" in arg for arg in calls[0]))
+            self.assertFalse(any("debuginfo=0" in arg for arg in calls[0]))
+
+            # Exercise the same real wrapper on Unix hosted/local builds. The
+            # compact test profile must never strip release package symbols.
+            for runner_os in ("Linux", "macOS"):
+                for hosted, release, verify_release in (
+                    (True, False, False),
+                    (True, True, False),
+                    (True, False, True),
+                    (False, False, False),
+                ):
+                    with self.subTest(
+                        runner_os=runner_os, hosted=hosted, release=release
+                    ):
+                        capture.unlink()
+                        args = ["build"]
+                        if release:
+                            args.append("--config=release")
+                        if verify_release:
+                            args.append("--build_metadata=TAG_job=verify-release-build")
+                        result = subprocess.run(
+                            [
+                                "bash",
+                                str(Path(__file__).with_name("run-bazel-ci.sh")),
+                                "--",
+                                *args,
+                                "--",
+                                "//fixture:test",
+                            ],
+                            env={
+                                "PATH": os.defpath,
+                                "RUNNER_OS": runner_os,
+                                "RUNNER_ENVIRONMENT": "github-hosted"
+                                if hosted
+                                else "self-hosted",
+                                "CODEX_BAZEL_BIN": str(fake_bazel),
+                                "BAZEL_CAPTURE": str(capture),
+                            },
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        )
+                        self.assertEqual(result.returncode, 37, result.stderr)
+                        [call] = [
+                            json.loads(line)
+                            for line in capture.read_text().splitlines()
+                        ]
+                        self.assertEqual(
+                            f"--jobs={'1' if verify_release else '4'}" in call,
+                            hosted,
+                        )
+                        self.assertEqual("--local_test_jobs=1" in call, hosted)
+                        for flag in ("extra_rustc_flag", "extra_exec_rustc_flag"):
+                            self.assertEqual(
+                                f"--@rules_rust//rust/settings:{flag}=-Cdebuginfo=0"
+                                in call,
+                                hosted and not release,
+                            )
+
+    @unittest.skipUnless(os.name == "posix", "exercises the Bash CI helper on Unix")
+    def test_windows_voice_inputs_are_fixed_and_do_not_reach_linux_rbe(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            capture = Path(temp_dir) / "args.json"
+            fake_bazel = Path(temp_dir) / "fake-bazel"
+            fake_bazel.write_text(
+                f"#!{sys.executable}\n"
+                "import json, os, sys\n"
+                "from pathlib import Path\n"
+                "Path(os.environ['BAZEL_CAPTURE']).write_text(json.dumps(sys.argv[1:]))\n",
+                encoding="utf-8",
+            )
+            fake_bazel.chmod(0o755)
+            env = {
+                "PATH": os.defpath,
+                "RUNNER_OS": "Windows",
+                "CODEX_BAZEL_BIN": str(fake_bazel),
+                "BAZEL_CAPTURE": str(capture),
+                "CODEX_BAZEL_WINDOWS_PATH": r"C:\Program Files\Build Tools",
+                "VOICE_WINDOWS_BAZEL_REPOSITORY": r"D:\voice tools",
+                "VOICE_WINDOWS_SYSTEM_ROOT": r"C:\Windows",
+                "VOICE_WINDOWS_HOST_ARCH": "AMD64",
+            }
+            for cross_compile, remote, status_override in (
+                (False, False, None),
+                (True, False, None),
+                (True, True, None),
+                (False, False, "--workspace_status_command=./custom-status.cmd"),
+            ):
+                with self.subTest(
+                    cross_compile=cross_compile,
+                    remote=remote,
+                    status_override=status_override,
+                ):
+                    case_env = dict(env)
+                    if remote:
+                        case_env["BUILDBUDDY_API_KEY"] = "fixture"
+                    result = subprocess.run(
+                        [
+                            "bash",
+                            str(Path(__file__).with_name("run-bazel-ci.sh")),
+                            *(["--windows-cross-compile"] if cross_compile else []),
+                            "--",
+                            "build",
+                            *([status_override] if status_override else []),
+                            "--",
+                            "//third_party/voice:pkg_config",
+                        ],
+                        env=case_env,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    args = json.loads(capture.read_text())
+                    self.assertEqual(
+                        [
+                            arg
+                            for arg in args
+                            if arg.startswith("--workspace_status_command=")
+                        ],
+                        [
+                            status_override
+                            or "--workspace_status_command=./scripts/workspace-status.cmd"
+                        ],
+                    )
+                    voice_args = [
+                        r"--inject_repository=voice_windows_tools=D:\voice tools",
+                        "--//third_party/voice:windows_installed_tools=@voice_windows_tools//:tools",
+                        r"--action_env=SystemRoot=C:\Windows",
+                        r"--host_action_env=SystemRoot=C:\Windows",
+                        "--action_env=PROCESSOR_ARCHITECTURE=AMD64",
+                        "--host_action_env=PROCESSOR_ARCHITECTURE=AMD64",
+                    ]
+                    for arg in voice_args:
+                        if remote:
+                            self.assertNotIn(arg, args)
+                        else:
+                            self.assertIn(arg, args)
+                            self.assertLess(args.index(arg), args.index("--"))
+                    if cross_compile and not remote:
+                        for arg in (
+                            "--host_platform=//:local_windows",
+                            "--platforms=//:windows_x86_64_gnullvm",
+                            "--extra_execution_platforms=//:windows_x86_64_gnullvm",
+                            "--extra_toolchains=//:windows_gnullvm_tests_on_gnullvm_host_toolchain",
+                        ):
+                            self.assertIn(arg, args)
+                        self.assertNotIn("--host_platform=//:local_windows_msvc", args)
+                    if not remote:
+                        self.assertIn("--disk_cache=", args)
+
 
 if __name__ == "__main__":
     unittest.main()

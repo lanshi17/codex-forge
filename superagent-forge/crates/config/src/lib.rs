@@ -1,5 +1,6 @@
 use serde::Deserialize;
-use std::{collections::BTreeSet, path::PathBuf};
+use std::collections::BTreeSet;
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Debug, Deserialize)]

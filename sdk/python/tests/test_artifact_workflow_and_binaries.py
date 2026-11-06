@@ -269,14 +269,24 @@ def test_root_format_driver_covers_all_formatter_groups(
         "MODULE.bazel",
         "third_party/v8/libcxx.BUILD.bazel",
     )
-    assert [group.commands[-1].args[-3:] for group in formatters[3:]] == [
-        ("ruff", "format", "sdk/python"),
-        ("ruff", "format", "."),
-    ]
-    assert [group.commands[-1].args[-4:] for group in checks[3:]] == [
-        ("ruff", "format", "--check", "sdk/python"),
-        ("ruff", "format", "--check", "."),
-    ]
+    assert formatters[3].commands[-1].args[-3:] == ("ruff", "format", "sdk/python")
+    assert checks[3].commands[-1].args[-4:] == ("ruff", "format", "--check", "sdk/python")
+    frozen_sources = 'extend-exclude = ["audit", "btae-eval/repositories"]'
+    assert formatters[4].commands[-1].args[-5:] == (
+        "ruff",
+        "format",
+        ".",
+        "--config",
+        frozen_sources,
+    )
+    assert checks[4].commands[-1].args[-6:] == (
+        "ruff",
+        "format",
+        "--check",
+        ".",
+        "--config",
+        frozen_sources,
+    )
 
 
 def test_root_format_driver_discards_successful_command_output(
@@ -948,6 +958,12 @@ def test_stage_runtime_release_rejects_incomplete_package_layout(
 def test_stage_runtime_directory_matches_archive(tmp_path: Path) -> None:
     script = _load_update_script_module()
     package_dir = _write_fake_codex_package(tmp_path / "codex-package", script)
+    # Give both inputs the release package's modes. The data extraction filter
+    # removes group/other write bits, whereas copytree preserves them; relying
+    # on the caller's umask would test two different permission contracts.
+    for entry in package_dir.rglob("*"):
+        if entry.is_file():
+            entry.chmod(0o644)
     (package_dir / "bin" / script.runtime_binary_name()).chmod(0o755)
     package_archive = tmp_path / "codex-package.tar.gz"
     _write_package_archive(package_dir, package_archive)

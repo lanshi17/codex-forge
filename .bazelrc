@@ -124,7 +124,10 @@ common:ci-bazel --build_metadata=TAG_workflow=bazel
 
 # Shared config for Bazel-backed Rust linting.
 build:clippy --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
-build:clippy --output_groups=+clippy_checks
+# Request lint outputs without linking every test binary. The full test and
+# release jobs still build executables; adding default outputs here duplicated
+# them on hosted runners and exhausted the disk before linting could finish.
+build:clippy --output_groups=clippy_checks
 build:clippy --@rules_rust//rust/settings:clippy.toml=//codex-rs:clippy.toml
 # Keep this deny-list in sync with `codex-rs/Cargo.toml` `[workspace.lints.clippy]`.
 # Cargo applies those lint levels to member crates that opt into `[lints] workspace = true`

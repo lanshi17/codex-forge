@@ -739,6 +739,56 @@ async fn worker_preserves_inherited_acl_through_append() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
+fn mapped_supplementary_groups(groups: &[u32], mapping: &str) -> anyhow::Result<Vec<u32>> {
+    use anyhow::Context;
+
+    let mut ranges = Vec::new();
+    for line in mapping.lines() {
+        let fields = line
+            .split_whitespace()
+            .map(str::parse::<u64>)
+            .collect::<Result<Vec<_>, _>>()?;
+        anyhow::ensure!(fields.len() == 3, "invalid group namespace mapping");
+        let end = fields[0]
+            .checked_add(fields[2])
+            .context("group namespace mapping overflow")?;
+        anyhow::ensure!(fields[2] > 0 && end <= 1_u64 << 32, "invalid group range");
+        ranges.push(fields[0]..end);
+    }
+    Ok(groups
+        .iter()
+        .copied()
+        .filter(|group| {
+            ranges
+                .iter()
+                .any(|range| range.contains(&u64::from(*group)))
+        })
+        .collect())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn supplementary_group_selection_respects_namespace_mappings() -> anyhow::Result<()> {
+    assert_eq!(
+        mapped_supplementary_groups(&[1001, 65534, 1002], "1001 1001 2\n")?,
+        vec![1001, 1002]
+    );
+    assert_eq!(
+        mapped_supplementary_groups(&[1001, 65534], "0 0 4294967295\n")?,
+        vec![1001, 65534]
+    );
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn supplementary_group_selection_rejects_invalid_mappings() {
+    for mapping in ["0 0", "invalid", "0 0 0", "4294967295 0 2"] {
+        assert!(mapped_supplementary_groups(&[1001], mapping).is_err());
+    }
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn worker_preserves_alternate_group_through_materialization() -> anyhow::Result<()> {
@@ -752,15 +802,17 @@ async fn worker_preserves_alternate_group_through_materialization() -> anyhow::R
     write_rollout(&path, thread_id, "different group")?;
     set_old_mtime(&path)?;
     let original_group = fs::metadata(&path)?.gid();
-    let groups = Command::new("id").arg("-G").output()?;
-    assert!(groups.status.success());
-    let Some(group) = std::str::from_utf8(&groups.stdout)?
+    let output = Command::new("id").arg("-G").output()?;
+    assert!(output.status.success());
+    let groups = std::str::from_utf8(&output.stdout)?
         .split_whitespace()
         .map(str::parse::<u32>)
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .find(|group| *group != original_group)
-    else {
+        .collect::<Result<Vec<_>, _>>()?;
+    // A user namespace reports unmapped supplementary groups as its overflow
+    // GID. Such IDs cannot be passed to chown, even though `id -G` lists them.
+    #[cfg(target_os = "linux")]
+    let groups = mapped_supplementary_groups(&groups, &fs::read_to_string("/proc/self/gid_map")?)?;
+    let Some(group) = groups.into_iter().find(|group| *group != original_group) else {
         eprintln!("skipping ownership regression: no alternate supplementary group");
         return Ok(());
     };

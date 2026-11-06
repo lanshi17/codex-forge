@@ -175,16 +175,14 @@ jobs:
         include:
           - name: Linux
             runner: ubuntu-24.04
-            timeout_minutes: 30
+            timeout_minutes: 240
           - name: macOS
-            runner: macos-15-xlarge
-            timeout_minutes: 30
+            runner: macos-15
+            timeout_minutes: 240
           - name: Windows
             runner: windows-x64
-            timeout_minutes: 30
-            runs_on:
-              group: ${{ github.event.repository.name }}-runners
-              labels: ${{ github.event.repository.name }}-windows-x64
+            timeout_minutes: 240
+            runs_on: windows-latest
     steps:
       - name: Check whether argument comment lint should run
         id: argument_comment_lint_gate
@@ -208,6 +206,7 @@ jobs:
         if: ${{ steps.argument_comment_lint_gate.outputs.run == 'true' }}
         uses: ./.github/actions/run-argument-comment-lint
         with:
+          msvc-runtime-eula: ${{ vars.BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA }}
           target: ${{ runner.os }}
           buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
 

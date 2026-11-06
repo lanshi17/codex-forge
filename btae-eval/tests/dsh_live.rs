@@ -1,6 +1,11 @@
 #![cfg(target_os = "linux")]
 use btae_eval::dsh_live::*;
-use std::{collections::BTreeMap, fs, path::PathBuf, sync::mpsc, thread, time::Duration};
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 fn exe() -> PathBuf {
     env!("CARGO_BIN_EXE_dsh-json-fixture").into()
 }
@@ -41,10 +46,17 @@ fn environment_is_cleared_and_only_allowlist_is_visible() {
 
 #[test]
 fn malformed_transcript_is_protocol_error() {
-    let start = std::time::Instant::now();
-    let record = run_live(request("malformed")).unwrap();
+    let mut req = request("malformed");
+    req.limits.wall_ms = 10_000;
+    let deadline_ms = req.limits.wall_ms;
+    let record = run_live(req).unwrap();
     assert_eq!(record.outcome, LiveOutcome::ProtocolError);
-    assert!(start.elapsed() < Duration::from_millis(500));
+    // Verify termination of a worker that never exits by itself, rather than
+    // imposing a subsecond benchmark on hashing and shared-runner scheduling.
+    assert_eq!(record.exit_code, None);
+    assert!(record.streams_closed);
+    assert_eq!(record.stdout_bytes, b"not-json\n".len() as u64);
+    assert!(record.elapsed_ms < deadline_ms);
     assert!(record.summary.is_none());
     assert!(record.note.unwrap() == "invalid_dsh_stream");
 }
@@ -99,6 +111,9 @@ fn stderr_output_limit_is_bounded() {
 fn evidence_directory_is_created_once_and_sealed_without_payloads() {
     let dir = std::env::temp_dir().join(format!("btae-live-evidence-{}", std::process::id()));
     let mut req = request("success");
+    // The started journal is fsynced inside the wall budget before spawning.
+    // This checks sealing and payload redaction, not shared-runner fsync latency.
+    req.limits.wall_ms = 10_000;
     req.output = Some(dir.clone());
     let marker = "LIVE_PAYLOAD_CANARY_20261103";
     req.prompt = marker.as_bytes().to_vec();
@@ -183,7 +198,8 @@ fn spawn_failure_leaves_a_sealed_failure_record() {
 
 #[test]
 fn cli_collect_has_success_and_failure_exit_codes_without_claiming_observation() {
-    use std::process::{Command, Stdio};
+    use std::process::Command;
+    use std::process::Stdio;
     for (scenario, expected) in [("success", 0), ("incomplete", 1), ("malformed", 1)] {
         let child = Command::new(env!("CARGO_BIN_EXE_btae-eval"))
             .args(["collect", "--executable"])

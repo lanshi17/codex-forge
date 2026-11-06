@@ -264,7 +264,37 @@ fn restricted_token_rejects_managed_network_before_spawn() {
 }
 
 #[test]
+fn legacy_entry_rejects_execution() {
+    current_thread_runtime().block_on(async {
+        let cwd = sandbox_cwd();
+        let codex_home = sandbox_home("legacy-entry-rejected");
+        let error = spawn_windows_sandbox_session_legacy(
+            &PermissionProfile::workspace_write(),
+            &[],
+            codex_home.path(),
+            vec!["cmd.exe".to_owned()],
+            cwd.as_path(),
+            HashMap::new(),
+            None,
+            &[],
+            &[],
+            false,
+            false,
+        )
+        .await
+        .expect_err("the legacy public entry must fail closed");
+
+        assert_eq!(
+            error.to_string(),
+            "legacy Windows sandbox backend is disabled; use the elevated Windows sandbox backend"
+        );
+    });
+}
+
+#[test]
 fn legacy_non_tty_cmd_emits_output() {
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let _guard = legacy_process_test_guard();
     let runtime = current_thread_runtime();
     runtime.block_on(async move {
@@ -272,7 +302,7 @@ fn legacy_non_tty_cmd_emits_output() {
         let codex_home = sandbox_home("legacy-non-tty-cmd");
         println!("cmd codex_home={}", codex_home.path().display());
         let permission_profile = PermissionProfile::workspace_write();
-        let spawned = spawn_windows_sandbox_session_legacy(
+        let spawned = spawn_windows_sandbox_session_elevated_for_permission_profile(
             &permission_profile,
             workspace_roots_for(cwd.as_path()).as_slice(),
             codex_home.path(),
@@ -283,11 +313,16 @@ fn legacy_non_tty_cmd_emits_output() {
             ],
             cwd.as_path(),
             HashMap::new(),
+            /*proxy_enforced*/ false,
+            /*network_proxy_restricting_sid*/ None,
             Some(5_000),
+            /*read_roots_override*/ None,
+            /*read_roots_include_platform_defaults*/ true,
+            /*write_roots_override*/ None,
             &[],
             &[],
-            /*tty*/ false,
-            /*stdin_open*/ false,
+            false,
+            false,
         )
         .await
         .expect("spawn legacy non-tty cmd session");
@@ -408,7 +443,9 @@ fn registered_non_tty_cmd_forwards_env_output_and_exit() {
 }
 
 #[test]
-fn legacy_non_tty_cmd_rejects_deny_read_overrides() {
+fn migrated_non_tty_cmd_accepts_deny_read_overrides() {
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let _guard = legacy_process_test_guard();
     let runtime = current_thread_runtime();
     runtime.block_on(async move {
@@ -418,29 +455,44 @@ fn legacy_non_tty_cmd_rejects_deny_read_overrides() {
             AbsolutePathBuf::from_absolute_path(cwd.join("legacy-non-tty-deny-read-secret.env"))
                 .expect("absolute deny-read fixture path");
         let permission_profile = PermissionProfile::workspace_write();
-        let err = spawn_windows_sandbox_session_legacy(
-            &permission_profile,
-            workspace_roots_for(cwd.as_path()).as_slice(),
-            codex_home.path(),
-            vec![
+        let spawned = spawn_windows_sandbox_session_for_level(WindowsSandboxSessionRequest {
+            permission_profile: &permission_profile,
+            workspace_roots: workspace_roots_for(cwd.as_path()).as_slice(),
+            codex_home: codex_home.path(),
+            command: vec![
                 "C:\\Windows\\System32\\cmd.exe".to_string(),
                 "/c".to_string(),
                 "echo deny-read".to_string(),
             ],
-            cwd.as_path(),
-            HashMap::new(),
-            Some(5_000),
-            std::slice::from_ref(&secret_path),
-            &[],
-            /*tty*/ false,
-            /*stdin_open*/ false,
-        )
+            cwd: cwd.as_path(),
+            env_map: HashMap::new(),
+            windows_sandbox_level: WindowsSandboxLevel::RestrictedToken,
+            proxy_enforced: false,
+            network_proxy_restricting_sid: None,
+            proxy_settings_mode: crate::WindowsSandboxProxySettingsMode::Reconcile,
+            timeout_ms: Some(5_000),
+            read_roots_override: None,
+            read_roots_include_platform_defaults: true,
+            write_roots_override: None,
+            deny_read_paths_override: std::slice::from_ref(&secret_path),
+            deny_write_paths_override: &[],
+            tty: false,
+            stdin_open: false,
+        })
         .await
-        .expect_err("legacy deny-read should require the elevated backend");
+        .expect("migrated deny-read command should use the elevated backend");
+        let (stdout, exit_code) =
+            collect_stdout_and_exit(spawned, codex_home.path(), Duration::from_secs(10)).await;
+        assert_eq!(
+            exit_code,
+            0,
+            "stdout={:?}",
+            String::from_utf8_lossy(&stdout)
+        );
         assert!(
-            err.to_string()
-                .contains("deny-read overrides require the elevated Windows sandbox backend"),
-            "unexpected error: {err:#}"
+            String::from_utf8_lossy(&stdout).contains("deny-read"),
+            "stdout={:?}",
+            String::from_utf8_lossy(&stdout)
         );
     });
 }
@@ -450,6 +502,8 @@ fn legacy_non_tty_powershell_interrupt_terminates_process() {
     let Some(pwsh) = pwsh_path() else {
         return;
     };
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let _guard = legacy_process_test_guard();
     let runtime = current_thread_runtime();
     runtime.block_on(async move {
@@ -457,7 +511,7 @@ fn legacy_non_tty_powershell_interrupt_terminates_process() {
         let codex_home = sandbox_home("legacy-non-tty-pwsh");
         println!("pwsh codex_home={}", codex_home.path().display());
         let permission_profile = PermissionProfile::workspace_write();
-        let spawned = spawn_windows_sandbox_session_legacy(
+        let spawned = spawn_windows_sandbox_session_elevated_for_permission_profile(
             &permission_profile,
             workspace_roots_for(cwd.as_path()).as_slice(),
             codex_home.path(),
@@ -469,11 +523,16 @@ fn legacy_non_tty_powershell_interrupt_terminates_process() {
             ],
             cwd.as_path(),
             HashMap::new(),
+            /*proxy_enforced*/ false,
+            /*network_proxy_restricting_sid*/ None,
             /*timeout_ms*/ None,
+            /*read_roots_override*/ None,
+            /*read_roots_include_platform_defaults*/ true,
+            /*write_roots_override*/ None,
             &[],
             &[],
-            /*tty*/ false,
-            /*stdin_open*/ false,
+            false,
+            false,
             )
         .await
         .expect("spawn legacy non-tty powershell session");
@@ -668,6 +727,8 @@ fn legacy_capture_emits_output_and_preserves_descendant_after_normal_exit() {
     let Some(pwsh) = pwsh_path() else {
         return;
     };
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let _guard = legacy_process_test_guard();
     let cwd = sandbox_cwd();
     let codex_home = sandbox_home("legacy-capture-pwsh");
@@ -734,12 +795,128 @@ fn legacy_capture_emits_output_and_preserves_descendant_after_normal_exit() {
 }
 
 #[test]
+fn legacy_capture_can_redirect_to_null_device() {
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
+    let _guard = legacy_process_test_guard();
+    let runtime = current_thread_runtime();
+    runtime.block_on(async move {
+        let workspace = TempDir::new_in(sandbox_cwd()).expect("create null-redirection workspace");
+        for permission_profile in [
+            PermissionProfile::workspace_write(),
+            PermissionProfile::read_only(),
+        ] {
+            let codex_home = sandbox_home("legacy-null-redirection");
+            let result = run_windows_sandbox_capture(
+                &permission_profile,
+                workspace_roots_for(workspace.path()).as_slice(),
+                codex_home.path(),
+                vec![
+                    "C:\\Windows\\System32\\cmd.exe".to_string(),
+                    "/d".to_string(),
+                    "/c".to_string(),
+                    "echo discard>NUL && echo null-device-ready".to_string(),
+                ],
+                workspace.path(),
+                HashMap::new(),
+                Some(5_000),
+                None,
+            )
+            .expect("capture null-redirection command");
+            assert_eq!(
+                (
+                    result.exit_code,
+                    String::from_utf8_lossy(&result.stdout).trim().to_string()
+                ),
+                (0, "null-device-ready".to_string()),
+                "{}",
+                sandbox_log(codex_home.path()),
+            );
+        }
+    });
+}
+
+#[test]
+fn legacy_capture_runs_rust_binary_in_each_permission_mode() {
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
+    let _guard = legacy_process_test_guard();
+    let workspace = TempDir::new_in(sandbox_cwd()).expect("create Rust startup workspace");
+    for permission_profile in [
+        PermissionProfile::workspace_write(),
+        PermissionProfile::read_only(),
+    ] {
+        let codex_home = sandbox_home("legacy-rust-startup");
+        let result = run_windows_sandbox_capture(
+            &permission_profile,
+            workspace_roots_for(workspace.path()).as_slice(),
+            codex_home.path(),
+            vec![
+                std::env::current_exe()
+                    .expect("test binary")
+                    .display()
+                    .to_string(),
+                "--list".to_string(),
+            ],
+            workspace.path(),
+            HashMap::new(),
+            /*timeout_ms*/ Some(10_000),
+            /*cancellation*/ None,
+        )
+        .expect("start Rust binary in legacy sandbox");
+        let stdout = String::from_utf8_lossy(&result.stdout);
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert_eq!(
+            (result.exit_code, result.timed_out),
+            (0, false),
+            "stdout={stdout:?} stderr={stderr:?}\n{}",
+            sandbox_log(codex_home.path()),
+        );
+        assert!(
+            stdout.contains("legacy_capture_runs_rust_binary_in_each_permission_mode: test"),
+            "stdout={stdout:?} stderr={stderr:?}"
+        );
+    }
+}
+
+#[test]
 fn legacy_workspace_write_delete_is_limited_to_writable_roots() {
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let _guard = legacy_process_test_guard();
     let runtime = current_thread_runtime();
     runtime.block_on(async move {
         // Keep writable roots out of USERPROFILE exclusions such as AppData.
         let test_root = TempDir::new_in(sandbox_cwd()).expect("create legacy delete test root");
+        // Exercise public write grants explicitly rather than inheriting the
+        // runner volume's ACL. They must not replace a write-root capability.
+        unsafe {
+            use windows_sys::Win32::Foundation::HLOCAL;
+            use windows_sys::Win32::Foundation::LocalFree;
+            use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
+            use windows_sys::Win32::Security::Authorization::SDDL_REVISION_1;
+            use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
+            use windows_sys::Win32::Security::PROTECTED_DACL_SECURITY_INFORMATION;
+            use windows_sys::Win32::Security::SetFileSecurityW;
+
+            let mut descriptor = std::ptr::null_mut();
+            assert_ne!(
+                ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    crate::winutil::to_wide("D:P(A;OICI;FA;;;WD)").as_ptr(),
+                    SDDL_REVISION_1,
+                    &mut descriptor,
+                    std::ptr::null_mut(),
+                ),
+                0,
+            );
+            let set = SetFileSecurityW(
+                crate::winutil::to_wide(test_root.path()).as_ptr(),
+                DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                descriptor,
+            );
+            LocalFree(descriptor as HLOCAL);
+            assert_ne!(set, 0, "install the world-writable fixture ACL");
+        }
         let codex_home = sandbox_home("legacy-delete-writable-roots");
         let workspace = test_root.path().join("workspace");
         let temp_root = test_root.path().join("temp");
@@ -801,7 +978,7 @@ fn legacy_workspace_write_delete_is_limited_to_writable_roots() {
         ]);
 
         let permission_profile = PermissionProfile::workspace_write();
-        let spawned = spawn_windows_sandbox_session_legacy(
+        let spawned = spawn_windows_sandbox_session_elevated_for_permission_profile(
             &permission_profile,
             workspace_roots_for(workspace.as_path()).as_slice(),
             codex_home.path(),
@@ -813,11 +990,16 @@ fn legacy_workspace_write_delete_is_limited_to_writable_roots() {
             ],
             workspace.as_path(),
             env_map,
-            /*timeout_ms*/ Some(5_000),
+            /*proxy_enforced*/ false,
+            /*network_proxy_restricting_sid*/ None,
+            Some(5_000),
+            /*read_roots_override*/ None,
+            /*read_roots_include_platform_defaults*/ true,
+            /*write_roots_override*/ None,
             &[],
             &[],
-            /*tty*/ false,
-            /*stdin_open*/ false,
+            false,
+            false,
         )
         .await
         .expect("spawn legacy delete session");
@@ -848,6 +1030,8 @@ fn legacy_capture_cancellation_terminates_descendants_without_timeout() {
         eprintln!("skipping cancellation regression test: PowerShell 7 is not installed");
         return;
     };
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let _guard = legacy_process_test_guard();
     let cwd = sandbox_cwd();
     let codex_home = sandbox_home("legacy-capture-cancel");
@@ -964,7 +1148,7 @@ async fn assert_legacy_tty_descendant_lifecycle(
     let parent_command =
         start_powershell_child(pwsh, codex_home.path(), &child_command, &parent_tail);
     let permission_profile = PermissionProfile::workspace_write();
-    let spawned = spawn_windows_sandbox_session_legacy(
+    let spawned = spawn_windows_sandbox_session_elevated_for_permission_profile(
         &permission_profile,
         workspace_roots_for(cwd.as_path()).as_slice(),
         codex_home.path(),
@@ -976,11 +1160,16 @@ async fn assert_legacy_tty_descendant_lifecycle(
         ],
         cwd.as_path(),
         HashMap::new(),
+        /*proxy_enforced*/ false,
+        /*network_proxy_restricting_sid*/ None,
         Some(30_000),
+        /*read_roots_override*/ None,
+        /*read_roots_include_platform_defaults*/ true,
+        /*write_roots_override*/ None,
         &[],
         &[],
-        /*tty*/ true,
-        /*stdin_open*/ false,
+        true,
+        false,
     )
     .await
     .expect("spawn legacy sandbox ConPTY lifecycle test");
@@ -1025,6 +1214,8 @@ fn legacy_tty_job_terminates_and_preserves_descendants() {
         eprintln!("skipping sandbox ConPTY lifecycle test: PowerShell 7 is not installed");
         return;
     };
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let _guard = legacy_process_test_guard();
     current_thread_runtime().block_on(async move {
         assert_legacy_tty_descendant_lifecycle(&pwsh, LegacyTtyDescendantLifecycle::Terminate)
@@ -1038,6 +1229,8 @@ fn legacy_tty_powershell_emits_output_and_accepts_input() {
     let Some(pwsh) = pwsh_path() else {
         return;
     };
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let _guard = legacy_process_test_guard();
     let runtime = current_thread_runtime();
     runtime.block_on(async move {
@@ -1045,7 +1238,7 @@ fn legacy_tty_powershell_emits_output_and_accepts_input() {
         let codex_home = sandbox_home("legacy-tty-pwsh");
         println!("tty pwsh codex_home={}", codex_home.path().display());
         let permission_profile = PermissionProfile::workspace_write();
-        let spawned = spawn_windows_sandbox_session_legacy(
+        let spawned = spawn_windows_sandbox_session_elevated_for_permission_profile(
             &permission_profile,
             workspace_roots_for(cwd.as_path()).as_slice(),
             codex_home.path(),
@@ -1059,11 +1252,16 @@ fn legacy_tty_powershell_emits_output_and_accepts_input() {
             ],
             cwd.as_path(),
             HashMap::new(),
+            /*proxy_enforced*/ false,
+            /*network_proxy_restricting_sid*/ None,
             Some(10_000),
+            /*read_roots_override*/ None,
+            /*read_roots_include_platform_defaults*/ true,
+            /*write_roots_override*/ None,
             &[],
             &[],
-            /*tty*/ true,
-            /*stdin_open*/ true,
+            true,
+            true,
         )
         .await
         .expect("spawn legacy tty powershell session");
@@ -1091,13 +1289,15 @@ fn legacy_tty_powershell_emits_output_and_accepts_input() {
 #[test]
 #[ignore = "TODO: legacy ConPTY cmd.exe exits with STATUS_DLL_INIT_FAILED in CI"]
 fn legacy_tty_cmd_emits_output_and_accepts_input() {
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let runtime = current_thread_runtime();
     runtime.block_on(async move {
         let cwd = sandbox_cwd();
         let codex_home = sandbox_home("legacy-tty-cmd");
         println!("tty cmd codex_home={}", codex_home.path().display());
         let permission_profile = PermissionProfile::workspace_write();
-        let spawned = spawn_windows_sandbox_session_legacy(
+        let spawned = spawn_windows_sandbox_session_elevated_for_permission_profile(
             &permission_profile,
             workspace_roots_for(cwd.as_path()).as_slice(),
             codex_home.path(),
@@ -1108,11 +1308,16 @@ fn legacy_tty_cmd_emits_output_and_accepts_input() {
             ],
             cwd.as_path(),
             HashMap::new(),
+            /*proxy_enforced*/ false,
+            /*network_proxy_restricting_sid*/ None,
             Some(10_000),
+            /*read_roots_override*/ None,
+            /*read_roots_include_platform_defaults*/ true,
+            /*write_roots_override*/ None,
             &[],
             &[],
-            /*tty*/ true,
-            /*stdin_open*/ true,
+            true,
+            true,
         )
         .await
         .expect("spawn legacy tty cmd session");

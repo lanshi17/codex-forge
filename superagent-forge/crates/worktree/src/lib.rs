@@ -1,5 +1,6 @@
 //! Git stays an external executable; never execute user text through a shell.
-use forge_domain::{AssignmentId, WorkspaceLease};
+use forge_domain::AssignmentId;
+use forge_domain::WorkspaceLease;
 use std::io;
 
 pub trait WorktreeManager: Send + Sync {

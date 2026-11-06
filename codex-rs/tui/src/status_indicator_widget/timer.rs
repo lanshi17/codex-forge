@@ -25,6 +25,15 @@ impl Default for StatusTimer {
 }
 
 impl StatusTimer {
+    #[cfg(test)]
+    pub(crate) fn freeze_at_start(&mut self) {
+        // Match the status effects fixtures: saturating elapsed time keeps the
+        // clock and fallback activity glyph at zero throughout a snapshot test.
+        self.last_resume_at = Instant::now() + Duration::from_secs(/*secs*/ 3600);
+        self.elapsed_running = Duration::ZERO;
+        self.display_started_at = None;
+    }
+
     pub(crate) fn reset(&mut self, elapsed: Duration) {
         self.elapsed_running = elapsed;
         self.last_resume_at = Instant::now();

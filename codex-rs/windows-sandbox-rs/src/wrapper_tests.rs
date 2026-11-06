@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use codex_protocol::config_types::WindowsSandboxLevel;
 use codex_protocol::models::PermissionProfile;
 use codex_utils_absolute_path::AbsolutePathBuf;
+use codex_windows_sandbox_test_support::WindowsSandboxAccountTestGuard;
 use pretty_assertions::assert_eq;
 
 use super::CODEX_HOME_FLAG;
@@ -28,6 +29,8 @@ use super::parse_windows_sandbox_wrapper_args;
 
 #[test]
 fn large_deny_list_uses_environment_without_changing_the_request() {
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let temp = tempfile::tempdir().expect("tempdir");
     let cwd = AbsolutePathBuf::from_absolute_path(temp.path()).expect("absolute command cwd");
     let paths = (0..1000)
@@ -93,6 +96,8 @@ fn large_deny_list_uses_environment_without_changing_the_request() {
 
 #[test]
 fn windows_wrapper_args_round_trip() {
+    let _account_guard =
+        WindowsSandboxAccountTestGuard::acquire().expect("lock Windows sandbox test accounts");
     let temp = tempfile::tempdir().expect("tempdir");
     let command_cwd =
         AbsolutePathBuf::from_absolute_path(temp.path()).expect("absolute command cwd");

@@ -7,6 +7,14 @@ inputs:
   cache-scope:
     description: Logical namespace used to keep concurrent Bazel jobs from reserving the same repository cache key.
     required: true
+  msvc-runtime-eula:
+    description: Explicit repository-owner acknowledgement of the MSVC runtime license.
+    required: false
+    default: ""
+  windows-voice-tools:
+    description: Provision pinned native voice build tools on Windows hosted CI.
+    required: false
+    default: "false"
 outputs:
   repository-cache-path:
     description: Filesystem path used for the Bazel repository cache.
@@ -23,6 +31,37 @@ runs:
   steps:
     - id: setup_ci
       uses: ./.github/actions/setup-ci
+
+    - name: Reclaim unused hosted SDK disk space
+      if: runner.environment == 'github-hosted' && runner.os != 'Windows'
+      shell: bash
+      run: python3 .github/scripts/reclaim_hosted_build_space.py
+
+    - name: Allow macOS high-descriptor regression fixtures
+      if: runner.environment == 'github-hosted' && runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        # The isolated PTY regression opens descriptors above Darwin's
+        # OPEN_MAX (10240). RLIMIT_NOFILE alone cannot raise the kernel caps.
+        if (( $(sysctl -n kern.maxfiles) < 65536 )); then
+          sudo sysctl -w kern.maxfiles=65536
+        fi
+        if (( $(sysctl -n kern.maxfilesperproc) < 32768 )); then
+          sudo sysctl -w kern.maxfilesperproc=32768
+        fi
+
+    - name: Honor explicit MSVC runtime license acknowledgement (Windows)
+      if: runner.os == 'Windows' && inputs.msvc-runtime-eula == '1'
+      shell: bash
+      # Opt in only after the repository owner confirms acceptance. An absent
+      # variable must keep windows_support's license check closed.
+      run: echo "BAZEL_MSVC_RUNTIME_VISUAL_STUDIO_EULA=1" >> "$GITHUB_ENV"
+
+    - name: Provision pinned Windows voice build tools
+      if: runner.os == 'Windows' && inputs.windows-voice-tools == 'true'
+      shell: pwsh
+      run: ./.github/scripts/prepare-voice-windows-ci.ps1
 
     - name: Set up Bazel
       uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86 # 0.19.0
@@ -102,6 +141,21 @@ runs:
       shell: pwsh
       run: ./.github/scripts/compute-bazel-windows-path.ps1
 
+    - name: Bind Windows build receipts to the checked-out revision
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $commit = git -C $env:GITHUB_WORKSPACE rev-parse --verify HEAD
+        if ($LASTEXITCODE -ne 0 -or $commit -cnotmatch '^[0-9a-f]{40}$') {
+          throw 'Cannot determine the checked-out build commit'
+        }
+        $env:STABLE_GIT_COMMIT = $commit
+        $status = & cmd.exe /S /E:ON /V:ON /D /C '.\scripts\workspace-status.cmd'
+        if ($LASTEXITCODE -ne 0 -or $status -cne "STABLE_GIT_COMMIT $commit") {
+          throw 'Windows workspace status helper did not emit the checked-out commit'
+        }
+        "STABLE_GIT_COMMIT=$commit" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
     - name: Compute bazel repository cache key
       id: cache_bazel_repository_key
       shell: bash
@@ -132,3 +186,22 @@ runs:
       run: |
         mkdir -p "${RUNNER_TEMP}/bazel-execution-logs"
         echo "CODEX_BAZEL_EXECUTION_LOG_COMPACT_DIR=${RUNNER_TEMP}/bazel-execution-logs" >> "${GITHUB_ENV}"
+
+    - name: Verify Windows Bazel build commit before compiling
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        ./.github/scripts/run-bazel-ci.sh -- build -- //bazel/build-info:build-commit-env
+        python - <<'PY'
+        import os
+        from pathlib import Path
+
+        status = Path(os.environ["BAZEL_OUTPUT_BASE"]) / "execroot/_main/bazel-out/stable-status.txt"
+        lines = status.read_text(encoding="utf-8").splitlines()
+        commits = [line for line in lines if line.startswith("STABLE_GIT_COMMIT ")]
+        expected = "STABLE_GIT_COMMIT " + os.environ["STABLE_GIT_COMMIT"]
+        if commits != [expected]:
+            keys = [line.partition(" ")[0] for line in lines]
+            raise SystemExit(f"Bazel build commit does not match checkout; status keys: {keys}")
+        print("Bazel workspace status matches the checked-out revision.")
+        PY

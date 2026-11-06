@@ -1,15 +1,19 @@
 //! Deliberately synthetic worker used only to test the supervisor and sandbox.
 #[cfg(target_os = "linux")]
 mod platform {
-    use btae_eval::runner::{FixtureEvent, PublicInput, Scenario};
+    use btae_eval::runner::FixtureEvent;
+    use btae_eval::runner::PublicInput;
+    use btae_eval::runner::Scenario;
     use clap::Parser;
-    use std::{
-        error::Error,
-        io::{self, Read, Write},
-        process::{Command, ExitCode, Stdio},
-        thread,
-        time::Duration,
-    };
+    use std::error::Error;
+    use std::io::Read;
+    use std::io::Write;
+    use std::io::{self};
+    use std::process::Command;
+    use std::process::ExitCode;
+    use std::process::Stdio;
+    use std::thread;
+    use std::time::Duration;
 
     #[derive(Parser)]
     struct Args {

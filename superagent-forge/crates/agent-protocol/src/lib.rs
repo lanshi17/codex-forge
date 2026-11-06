@@ -1,5 +1,7 @@
-use forge_domain::{Assignment, TaskMandate};
-use serde::{Deserialize, Serialize};
+use forge_domain::Assignment;
+use forge_domain::TaskMandate;
+use serde::Deserialize;
+use serde::Serialize;
 
 pub const PROTOCOL_VERSION: u32 = 1;
 

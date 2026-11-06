@@ -557,7 +557,6 @@ mod windows_impl {
     use super::logging::log_success;
     use super::process::ConsoleMode;
     use super::process::create_process_as_user;
-    use super::sandbox_utils::ensure_codex_home_exists;
     use super::spawn_prep::LegacyAclSids;
     use super::spawn_prep::SpawnPrepOptions;
     use super::spawn_prep::allow_null_device_for_workspace_write;
@@ -565,7 +564,6 @@ mod windows_impl {
     use super::spawn_prep::legacy_session_capability_roots;
     use super::spawn_prep::prepare_legacy_session_security;
     use super::spawn_prep::prepare_legacy_spawn_context;
-    use super::spawn_prep::root_capability_sids;
     use anyhow::Result;
     use codex_protocol::models::PermissionProfile;
     use codex_utils_absolute_path::AbsolutePathBuf;
@@ -704,8 +702,48 @@ mod windows_impl {
         )
     }
 
+    /// Captures a sandboxed command through the account-backed elevated runner.
+    ///
+    /// The former direct restricted-token implementation remains test-only so
+    /// production callers cannot reintroduce the parent-directory delete
+    /// bypass.
     #[allow(clippy::too_many_arguments)]
     pub fn run_windows_sandbox_capture_with_filesystem_overrides(
+        permission_profile: &PermissionProfile,
+        workspace_roots: &[AbsolutePathBuf],
+        codex_home: &Path,
+        command: Vec<String>,
+        cwd: &Path,
+        env_map: HashMap<String, String>,
+        timeout_ms: Option<u64>,
+        cancellation: Option<WindowsSandboxCancellationToken>,
+        additional_deny_read_paths: &[AbsolutePathBuf],
+        additional_deny_write_paths: &[AbsolutePathBuf],
+    ) -> Result<CaptureResult> {
+        crate::elevated_impl::run_windows_sandbox_capture_for_permission_profile(
+            crate::elevated_impl::ElevatedSandboxProfileCaptureRequest {
+                permission_profile,
+                workspace_roots,
+                codex_home,
+                command,
+                cwd,
+                env_map,
+                timeout_ms,
+                cancellation,
+                proxy_enforced: false,
+                network_proxy_restricting_sid: None,
+                read_roots_override: None,
+                read_roots_include_platform_defaults: true,
+                write_roots_override: None,
+                deny_read_paths_override: additional_deny_read_paths,
+                deny_write_paths_override: additional_deny_write_paths,
+            },
+        )
+    }
+
+    #[allow(dead_code)]
+    #[allow(clippy::too_many_arguments)]
+    fn run_windows_sandbox_capture_with_filesystem_overrides_legacy(
         permission_profile: &PermissionProfile,
         workspace_roots: &[AbsolutePathBuf],
         codex_home: &Path,
@@ -746,8 +784,8 @@ mod windows_impl {
                 "Restricted read-only access requires the elevated Windows sandbox backend"
             );
         }
-        // WRITE_RESTRICTED tokens consult restricting SIDs only for writes, so this
-        // backend cannot make capability-SID deny-read ACLs authoritative.
+        // The legacy direct launcher cannot make capability-SID deny-read ACLs
+        // authoritative; runtime callers must use the elevated backend.
         if !additional_deny_read_paths.is_empty() {
             anyhow::bail!("deny-read overrides require the elevated Windows sandbox backend");
         }
@@ -760,7 +798,7 @@ mod windows_impl {
             capability_roots,
         )?;
         allow_null_device_for_workspace_write(uses_write_capabilities);
-        apply_legacy_session_acl_rules(
+        if let Err(error) = apply_legacy_session_acl_rules(
             &permissions,
             codex_home,
             &current_dir,
@@ -772,7 +810,10 @@ mod windows_impl {
                 readonly_sid_str: security.readonly_sid_str.as_deref(),
                 write_root_sids: &security.write_root_sids,
             },
-        )?;
+        ) {
+            unsafe { CloseHandle(security.h_token) };
+            return Err(error);
+        }
         let (stdin_pair, stdout_pair, stderr_pair) = unsafe { setup_stdio_pipes()? };
         let ((in_r, in_w), (out_r, out_w), (err_r, err_w)) = (stdin_pair, stdout_pair, stderr_pair);
         let spawn_res = crate::LaunchDesktop::prepare_legacy(
@@ -943,36 +984,17 @@ mod windows_impl {
         cwd: &Path,
         env_map: &HashMap<String, String>,
     ) -> Result<()> {
-        let Ok(permissions) = super::resolved_permissions::ResolvedWindowsSandboxPermissions::try_from_permission_profile_for_workspace_roots(
+        // Preserve the old setup hook for source compatibility, but use the
+        // same ACL refresh as the elevated runner. The direct legacy ACL
+        // preflight is retired together with its process launcher.
+        crate::setup::run_setup_refresh(
             permission_profile,
             workspace_roots,
-        ) else {
-            return Ok(());
-        };
-        if !permissions.uses_write_capabilities_for_cwd(cwd, env_map) {
-            return Ok(());
-        }
-
-        ensure_codex_home_exists(codex_home)?;
-        let current_dir = cwd.to_path_buf();
-        let capability_roots =
-            legacy_session_capability_roots(&permissions, &current_dir, env_map, codex_home);
-        let write_root_sids = root_capability_sids(codex_home, cwd, capability_roots)?;
-        apply_legacy_session_acl_rules(
-            &permissions,
-            codex_home,
-            &current_dir,
+            cwd,
             env_map,
-            &[],
-            &[],
-            LegacyAclSids {
-                readonly_sid: None,
-                readonly_sid_str: None,
-                write_root_sids: &write_root_sids,
-            },
-        )?;
-
-        Ok(())
+            codex_home,
+            /*proxy_enforced*/ false,
+        )
     }
 
     #[cfg(test)]

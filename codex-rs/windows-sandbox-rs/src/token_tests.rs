@@ -46,6 +46,209 @@ unsafe fn token_has_restricting_sid(token: HANDLE, expected_sid: *mut c_void) ->
 }
 
 #[test]
+fn legacy_tokens_do_not_accept_everyone_as_a_write_restriction() -> Result<()> {
+    use std::os::windows::io::AsRawHandle;
+    use std::os::windows::io::FromRawHandle;
+    use std::os::windows::io::OwnedHandle;
+
+    let capability = LocalSid::from_string("S-1-5-21-10-20-30-40")?;
+    unsafe {
+        let base = OwnedHandle::from_raw_handle(get_current_token_for_restriction()?);
+        let mut everyone = world_sid()?;
+        let mut logon = get_logon_sid_bytes(base.as_raw_handle())?;
+        for create_token in [
+            create_workspace_write_token_with_caps_from,
+            create_readonly_token_with_caps_from,
+        ] {
+            let token = OwnedHandle::from_raw_handle(create_token(
+                base.as_raw_handle(),
+                &[capability.as_ptr()],
+            )?);
+            assert!(token_has_restricting_sid(
+                token.as_raw_handle(),
+                capability.as_ptr()
+            )?);
+            assert!(token_has_restricting_sid(
+                token.as_raw_handle(),
+                logon.as_mut_ptr().cast()
+            )?);
+            assert!(!token_has_restricting_sid(
+                token.as_raw_handle(),
+                everyone.as_mut_ptr().cast()
+            )?);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn legacy_tokens_deny_public_acl_mutations_without_a_root_capability() -> Result<()> {
+    use std::os::windows::io::AsRawHandle;
+    use std::os::windows::io::FromRawHandle;
+    use std::os::windows::io::OwnedHandle;
+    use windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
+    use windows_sys::Win32::Security::Authorization::SDDL_REVISION_1;
+    use windows_sys::Win32::Security::DACL_SECURITY_INFORMATION;
+    use windows_sys::Win32::Security::DuplicateToken;
+    use windows_sys::Win32::Security::ImpersonateLoggedOnUser;
+    use windows_sys::Win32::Security::PROTECTED_DACL_SECURITY_INFORMATION;
+    use windows_sys::Win32::Security::RevertToSelf;
+    use windows_sys::Win32::Security::SecurityImpersonation;
+    use windows_sys::Win32::Security::SetFileSecurityW;
+
+    fn access_allowed(path: &std::path::Path, token: HANDLE, access: u32) -> Result<bool> {
+        use windows_sys::Win32::Security::AccessCheck;
+        use windows_sys::Win32::Security::GENERIC_MAPPING;
+        use windows_sys::Win32::Security::GROUP_SECURITY_INFORMATION;
+        use windows_sys::Win32::Security::GetFileSecurityW;
+        use windows_sys::Win32::Security::OWNER_SECURITY_INFORMATION;
+        use windows_sys::Win32::Storage::FileSystem::FILE_ALL_ACCESS;
+        use windows_sys::Win32::Storage::FileSystem::FILE_GENERIC_EXECUTE;
+        use windows_sys::Win32::Storage::FileSystem::FILE_GENERIC_READ;
+        use windows_sys::Win32::Storage::FileSystem::FILE_GENERIC_WRITE;
+
+        let information =
+            OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION;
+        let mut needed = 0;
+        unsafe {
+            GetFileSecurityW(
+                to_wide(path).as_ptr(),
+                information,
+                std::ptr::null_mut(),
+                0,
+                &mut needed,
+            );
+        }
+        ensure!(needed > 0, "query test descriptor size");
+        let mut descriptor = vec![0_u64; (needed as usize).div_ceil(8)];
+        let mut privileges = [0_u64; 128];
+        let mut privilege_size = std::mem::size_of_val(&privileges) as u32;
+        let mapping = GENERIC_MAPPING {
+            GenericRead: FILE_GENERIC_READ,
+            GenericWrite: FILE_GENERIC_WRITE,
+            GenericExecute: FILE_GENERIC_EXECUTE,
+            GenericAll: FILE_ALL_ACCESS,
+        };
+        let mut granted = 0;
+        let mut allowed = 0;
+        unsafe {
+            ensure!(
+                GetFileSecurityW(
+                    to_wide(path).as_ptr(),
+                    information,
+                    descriptor.as_mut_ptr().cast(),
+                    needed,
+                    &mut needed
+                ) != 0
+            );
+            ensure!(
+                AccessCheck(
+                    descriptor.as_mut_ptr().cast(),
+                    token,
+                    access,
+                    &mapping,
+                    privileges.as_mut_ptr().cast(),
+                    &mut privilege_size,
+                    &mut granted,
+                    &mut allowed
+                ) != 0,
+                "AccessCheck: {}",
+                GetLastError()
+            );
+        }
+        Ok(allowed != 0)
+    }
+
+    struct Impersonation;
+    impl Drop for Impersonation {
+        fn drop(&mut self) {
+            assert_ne!(unsafe { RevertToSelf() }, 0, "restore test thread token");
+        }
+    }
+
+    let fixture = tempfile::tempdir()?;
+    unsafe {
+        let mut descriptor = std::ptr::null_mut();
+        ensure!(
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                to_wide("D:P(A;OICI;FA;;;WD)(A;OICI;GRGX;;;S-1-5-21-10-20-30-40)",).as_ptr(),
+                SDDL_REVISION_1,
+                &mut descriptor,
+                std::ptr::null_mut(),
+            ) != 0
+        );
+        let installed = SetFileSecurityW(
+            to_wide(fixture.path()).as_ptr(),
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            descriptor,
+        );
+        LocalFree(descriptor as HLOCAL);
+        ensure!(
+            installed != 0,
+            "install public fixture ACL: {}",
+            GetLastError()
+        );
+    }
+    let capability = LocalSid::from_string("S-1-5-21-10-20-30-40")?;
+    let base = unsafe { OwnedHandle::from_raw_handle(get_current_token_for_restriction()?) };
+    for create_token in [
+        create_workspace_write_token_with_caps_from,
+        create_readonly_token_with_caps_from,
+    ] {
+        let file = fixture.path().join("public.txt");
+        let directory = fixture.path().join("public-directory");
+        std::fs::write(&file, "readable")?;
+        std::fs::create_dir(&directory)?;
+        let token = unsafe {
+            OwnedHandle::from_raw_handle(create_token(
+                base.as_raw_handle(),
+                &[capability.as_ptr()],
+            )?)
+        };
+        let mut impersonation = std::ptr::null_mut();
+        ensure!(
+            unsafe {
+                DuplicateToken(
+                    token.as_raw_handle(),
+                    SecurityImpersonation,
+                    &mut impersonation,
+                )
+            } != 0
+        );
+        let impersonation = unsafe { OwnedHandle::from_raw_handle(impersonation) };
+        // Compare the explicit access check with real NTFS operations. This
+        // distinguishes token write checks from filesystem delete semantics.
+        let checked_write = access_allowed(
+            &file,
+            impersonation.as_raw_handle(),
+            windows_sys::Win32::Storage::FileSystem::FILE_WRITE_DATA,
+        )?;
+        let checked_delete = access_allowed(
+            &file,
+            impersonation.as_raw_handle(),
+            windows_sys::Win32::Storage::FileSystem::DELETE,
+        )?;
+        ensure!(unsafe { ImpersonateLoggedOnUser(impersonation.as_raw_handle()) } != 0);
+        let guard = Impersonation;
+        let read = std::fs::read_to_string(&file);
+        let write = std::fs::OpenOptions::new().write(true).open(&file);
+        let delete_file = std::fs::remove_file(&file);
+        let delete_directory = std::fs::remove_dir(&directory);
+        drop(guard);
+
+        assert_eq!(read?, "readable");
+        assert!(
+            write.is_err() && delete_file.is_err() && delete_directory.is_err(),
+            "restricted-token mutations: write={write:?}, delete_file={delete_file:?}, delete_directory={delete_directory:?}; AccessCheck: write={checked_write}, delete={checked_delete}"
+        );
+        assert_eq!(std::fs::read_to_string(&file)?, "readable");
+        assert!(directory.is_dir());
+        std::fs::remove_dir(&directory)?;
+    }
+    Ok(())
+}
+
+#[test]
 fn elevated_token_includes_network_proxy_restricting_sid() -> Result<()> {
     let capability_sid = LocalSid::from_string("S-1-5-21-10-20-30-40")?;
     let network_proxy_sid = LocalSid::from_string("S-1-5-21-50-60-70-80")?;
@@ -170,7 +373,7 @@ fn default_objects_deny_other_logons_even_with_the_same_owner() -> Result<()> {
         ensure!(
             CreateRestrictedToken(
                 base_raw,
-                DISABLE_MAX_PRIVILEGE | LUA_TOKEN | WRITE_RESTRICTED,
+                DISABLE_MAX_PRIVILEGE | LUA_TOKEN,
                 1,
                 &disabled,
                 0,

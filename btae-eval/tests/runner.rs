@@ -1,13 +1,15 @@
 #![cfg(target_os = "linux")]
 use btae_eval::runner::*;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
-    sync::atomic::{AtomicU64, Ordering},
-    thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::thread;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Temp(PathBuf);
@@ -128,8 +130,22 @@ fn timeout_stops_without_retrying_or_resetting_the_clock() {
     req.limits.wall_ms = 200;
     let record = run_diagnostic(req).unwrap();
     assert_eq!(record.outcome, ProcessOutcome::TimedOut);
-    assert_eq!(record.attempts.len(), 1);
-    assert!(record.elapsed_ms < 2500 && record.attempts[0].streams_closed);
+    // Seed export and evidence preparation consume the same episode budget.
+    // A loaded host may exhaust it before starting the first worker.
+    assert!(record.attempts.len() <= 1);
+    assert!(record.elapsed_ms >= record.limits.wall_ms);
+    assert!(record.elapsed_ms < 2500);
+    if let Some(attempt) = record.attempts.first() {
+        assert_eq!(attempt.outcome, ProcessOutcome::TimedOut);
+        assert_eq!(attempt.exit_code, None, "worker must be killed by signal");
+        assert!(attempt.streams_closed);
+    } else {
+        assert!(!tmp.0.join("run/attempt-1").exists());
+        assert_eq!(record.usage_total.input_tokens, 0);
+        assert_eq!(record.usage_total.output_tokens, 0);
+    }
+    assert!(!tmp.0.join("run/attempt-2").exists());
+    verify_diagnostic(&tmp.0.join("run"), &manifest()).unwrap();
 }
 
 #[test]
@@ -139,6 +155,10 @@ fn timeout_kills_the_descendant_not_just_direct_child() {
     req.limits.wall_ms = 700;
     let record = run_diagnostic(req).unwrap();
     assert_eq!(record.outcome, ProcessOutcome::TimedOut);
+    assert_eq!(record.attempts.len(), 1);
+    assert_eq!(record.attempts[0].outcome, ProcessOutcome::TimedOut);
+    assert_eq!(record.attempts[0].exit_code, None);
+    assert!(record.elapsed_ms >= record.limits.wall_ms);
     let heartbeat = tmp.0.join("run/workspace/heartbeat.txt");
     let size = fs::metadata(&heartbeat).unwrap().len();
     assert!(size > 0);

@@ -101,7 +101,7 @@ print_bazel_test_log_tails() {
   # mode can make `bazel info` fail, which would hide the real test log path.
   for arg in "${post_config_bazel_args[@]}"; do
     case "$arg" in
-      --host_platform=* | --repo_contents_cache=* | --repository_cache=*)
+      --host_platform=* | --platforms=* | --repo_contents_cache=* | --repository_cache=*)
         bazel_info_args+=("$arg")
         ;;
     esac
@@ -257,9 +257,8 @@ fi
 
 if [[ "${RUNNER_OS:-}" == "Windows" && $windows_cross_compile -eq 1 && -z "${BUILDBUDDY_API_KEY:-}" ]]; then
   # Windows cross-compilation depends on authenticated RBE. Preserve the local
-  # Windows build shape when credentials are unavailable.
+  # Windows host while retaining the intended gnullvm target selection.
   ci_config=ci-windows
-  windows_msvc_host_platform=1
 fi
 
 post_config_bazel_args=()
@@ -301,9 +300,19 @@ fi
 
 if [[ "${RUNNER_OS:-}" == "Windows" && $windows_cross_compile -eq 1 && -z "${BUILDBUDDY_API_KEY:-}" ]]; then
   # The Windows cross-compile config depends on authenticated remote
-  # execution. When credentials are unavailable, keep the local build shape
-  # and its lower concurrency cap.
-  post_config_bazel_args+=(--jobs=8)
+  # execution. Keep both target libraries and host proc-macros on the GNU ABI;
+  # MSVC Rust host tools otherwise mix with hermetic LLVM's GNU AWS-LC objects.
+  post_config_bazel_args+=(
+    --host_platform=//:local_windows
+    --platforms=//:windows_x86_64_gnullvm
+    --extra_execution_platforms=//:windows_x86_64_gnullvm
+    --extra_toolchains=//:windows_gnullvm_tests_on_gnullvm_host_toolchain
+    --jobs=8
+    # Keep process fixtures from competing with each other and the cold build.
+    # Restore the cross configuration's per-binary limit without its skip list.
+    --local_test_jobs=1
+    --test_env=RUST_TEST_THREADS=1
+  )
 fi
 
 if [[ -n "${BAZEL_REPO_CONTENTS_CACHE:-}" ]]; then
@@ -324,6 +333,19 @@ if [[ -n "${CODEX_BAZEL_EXECUTION_LOG_COMPACT_DIR:-}" ]]; then
 fi
 
 if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+  # Use the same native status helper as Windows release builds. This command
+  # runs on the Windows client even when build actions execute on Linux RBE.
+  has_workspace_status_override=0
+  for arg in "${bazel_args[@]}"; do
+    if [[ "$arg" == --workspace_status_command=* ]]; then
+      has_workspace_status_override=1
+      break
+    fi
+  done
+  if [[ $has_workspace_status_override -eq 0 ]]; then
+    post_config_bazel_args+=(--workspace_status_command=./scripts/workspace-status.cmd)
+  fi
+
   pass_windows_build_env=1
   if [[ $windows_cross_compile -eq 1 && -n "${BUILDBUDDY_API_KEY:-}" ]]; then
     # Remote build actions execute on Linux RBE workers. Passing the Windows
@@ -333,6 +355,21 @@ if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
   fi
 
   if [[ $pass_windows_build_env -eq 1 ]]; then
+    # Native voice rules inspect these during analysis, so inherited values
+    # (--action_env=NAME) are insufficient. Supply fixed, provisioned inputs.
+    if [[ -n "${VOICE_WINDOWS_BAZEL_REPOSITORY:-}" ]]; then
+      : "${VOICE_WINDOWS_SYSTEM_ROOT:?Windows voice SystemRoot is required}"
+      : "${VOICE_WINDOWS_HOST_ARCH:?Windows voice host architecture is required}"
+      post_config_bazel_args+=(
+        "--inject_repository=voice_windows_tools=${VOICE_WINDOWS_BAZEL_REPOSITORY}"
+        "--//third_party/voice:windows_installed_tools=@voice_windows_tools//:tools"
+        "--action_env=SystemRoot=${VOICE_WINDOWS_SYSTEM_ROOT}"
+        "--host_action_env=SystemRoot=${VOICE_WINDOWS_SYSTEM_ROOT}"
+        "--action_env=PROCESSOR_ARCHITECTURE=${VOICE_WINDOWS_HOST_ARCH}"
+        "--host_action_env=PROCESSOR_ARCHITECTURE=${VOICE_WINDOWS_HOST_ARCH}"
+        "--extra_toolchains=//third_party/voice:windows_pkg_config_toolchain,//third_party/voice:windows_cmake_toolchain"
+      )
+    fi
     windows_action_env_vars=(
       INCLUDE
       LIB
@@ -388,6 +425,40 @@ if [[ -n "${BUILDBUDDY_API_KEY:-}" ]]; then
   bazel_run_args+=("--config=${ci_config}")
 else
   echo "BuildBuddy API key is not available; using local Bazel configuration."
+  # Hosted machines already retain declared outputs in output_base. A second
+  # complete copy in the disk cache exhausts their cold-build disk budget.
+  bazel_run_args+=(--disk_cache=)
+  if [[ "${RUNNER_ENVIRONMENT:-}" == "github-hosted" && "${RUNNER_OS:-}" != "Windows" &&
+        ( "${bazel_args[0]}" == "build" || "${bazel_args[0]}" == "test" ) ]]; then
+    # The upstream defaults assume remote execution. Bound cold local builds
+    # on hosted machines, retaining all targets and all runtime assertions.
+    local_jobs=4
+    for arg in "${bazel_args[@]}"; do
+      if [[ "$arg" == "--build_metadata=TAG_job=verify-release-build" ]]; then
+        # The release verification graph contains several unusually large Rust
+        # links. Serializing these links avoids the hosted runner's peak memory
+        # and temporary-output pressure while retaining the same targets and
+        # release-configuration checks.
+        local_jobs=1
+        break
+      fi
+    done
+    bazel_run_args+=(--jobs="$local_jobs" --local_test_jobs=1)
+    release_build=0
+    for arg in "${bazel_args[@]}"; do
+      if [[ "$arg" == "--config=release" ]]; then
+        release_build=1
+      fi
+    done
+    if [[ "$release_build" == 0 ]]; then
+      # DWARF dominates the many linked test binaries. Keep debug assertions
+      # and optimization unchanged; release packaging still retains symbols.
+      bazel_run_args+=(
+        --@rules_rust//rust/settings:extra_rustc_flag=-Cdebuginfo=0
+        --@rules_rust//rust/settings:extra_exec_rustc_flag=-Cdebuginfo=0
+      )
+    fi
+  fi
   if [[ "${bazel_args[0]}" == "test" ]]; then
     bazel_run_args+=("--test_env=INSTA_UPDATE=no")
   fi

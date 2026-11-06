@@ -22,13 +22,23 @@
 //! observed raw field subtotals and their coverage remain auditable.
 
 use crate::digest;
-use serde::de::{DeserializeOwned, Error as DeError, MapAccess, SeqAccess, Visitor};
-use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::{Map, Number, Value};
-use sha2::{Digest, Sha256};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde::de::Error as DeError;
+use serde::de::MapAccess;
+use serde::de::SeqAccess;
+use serde::de::Visitor;
+use serde_json::Map;
+use serde_json::Number;
+use serde_json::Value;
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeSet;
 use std::fmt;
-use std::io::{self, Read};
+use std::io::Read;
+use std::io::{self};
 use thiserror::Error;
 
 /// The only provenance label this adapter can justify.

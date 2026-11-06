@@ -6,9 +6,12 @@ pub mod dsh_live;
 pub mod runner;
 #[cfg(target_os = "linux")]
 pub mod task_collect;
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use serde::Deserialize;
+use serde::Serialize;
+use sha2::Digest;
+use sha2::Sha256;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use thiserror::Error;
 
 pub const ARMS: [&str; 5] = ["A", "B", "C", "D", "E"];
