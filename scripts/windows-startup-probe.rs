@@ -45,7 +45,7 @@ fn startup_probe() -> Result<()> {
         ensure!(!desktop.is_null(), "create desktop: {}", GetLastError());
         describe(desktop, "desktop")?;
         for use_private in [false, true] {
-            for environment in ["inherit"] {
+            for environment in ["inherit", "systemroot", "empty"] {
           for containment in [false, true] {
            for pipes in [false, true] {
                 for token in [base, restricted] {
@@ -77,7 +77,12 @@ fn startup_probe() -> Result<()> {
                     startup.lpAttributeList = attrs.as_mut_ptr();
                     let mut info = std::mem::zeroed();
                     let mut env = if environment == "empty" { vec![0u16; 2] } else { to_wide(format!("SystemRoot={}\0", std::env::var("SystemRoot")?)) };
-                    ensure!(CreateProcessAsUserW(token, ptr::null(), command.as_mut_ptr(), ptr::null(), ptr::null(), i32::from(pipes), CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT, if environment == "inherit" { ptr::null() } else { env.as_mut_ptr().cast() }, ptr::null(), &startup.StartupInfo, &mut info) != 0, "spawn: {}", GetLastError());
+                    let environment_ptr = match environment {
+                        "inherit" => ptr::null_mut(),
+                        "systemroot" | "empty" => env.as_mut_ptr().cast(),
+                        _ => unreachable!(),
+                    };
+                    ensure!(CreateProcessAsUserW(token, ptr::null(), command.as_mut_ptr(), ptr::null(), ptr::null(), i32::from(pipes), CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT, environment_ptr, ptr::null(), &startup.StartupInfo, &mut info) != 0, "spawn: {}", GetLastError());
                     let wait = WaitForSingleObject(info.hProcess, 10000);
                     let mut exit = 0;
                     GetExitCodeProcess(info.hProcess, &mut exit);
