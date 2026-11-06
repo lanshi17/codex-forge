@@ -432,7 +432,18 @@ else
         ( "${bazel_args[0]}" == "build" || "${bazel_args[0]}" == "test" ) ]]; then
     # The upstream defaults assume remote execution. Bound cold local builds
     # on hosted machines, retaining all targets and all runtime assertions.
-    bazel_run_args+=(--jobs=4 --local_test_jobs=1)
+    local_jobs=4
+    for arg in "${bazel_args[@]}"; do
+      if [[ "$arg" == "--build_metadata=TAG_job=verify-release-build" ]]; then
+        # The release verification graph contains several unusually large Rust
+        # links. Serializing these links avoids the hosted runner's peak memory
+        # and temporary-output pressure while retaining the same targets and
+        # release-configuration checks.
+        local_jobs=1
+        break
+      fi
+    done
+    bazel_run_args+=(--jobs="$local_jobs" --local_test_jobs=1)
     release_build=0
     for arg in "${bazel_args[@]}"; do
       if [[ "$arg" == "--config=release" ]]; then

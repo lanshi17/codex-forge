@@ -345,7 +345,12 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
             # Exercise the same real wrapper on Unix hosted/local builds. The
             # compact test profile must never strip release package symbols.
             for runner_os in ("Linux", "macOS"):
-                for hosted, release in ((True, False), (True, True), (False, False)):
+                for hosted, release, verify_release in (
+                    (True, False, False),
+                    (True, True, False),
+                    (True, False, True),
+                    (False, False, False),
+                ):
                     with self.subTest(
                         runner_os=runner_os, hosted=hosted, release=release
                     ):
@@ -353,6 +358,10 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
                         args = ["build"]
                         if release:
                             args.append("--config=release")
+                        if verify_release:
+                            args.append(
+                                "--build_metadata=TAG_job=verify-release-build"
+                            )
                         result = subprocess.run(
                             [
                                 "bash",
@@ -380,7 +389,10 @@ class RunBazelWithBuildBuddyTest(unittest.TestCase):
                             json.loads(line)
                             for line in capture.read_text().splitlines()
                         ]
-                        self.assertEqual("--jobs=4" in call, hosted)
+                        self.assertEqual(
+                            f"--jobs={'1' if verify_release else '4'}" in call,
+                            hosted,
+                        )
                         self.assertEqual("--local_test_jobs=1" in call, hosted)
                         for flag in ("extra_rustc_flag", "extra_exec_rustc_flag"):
                             self.assertEqual(

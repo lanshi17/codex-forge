@@ -12,6 +12,11 @@ LINUX_UNUSED_SDKS = (
     Path("/usr/share/dotnet"),
     Path("/opt/ghc"),
     Path("/usr/local/.ghcup"),
+    # These hosted-image installations are not consumed by this repository's
+    # Bazel, Rust, Python, or SDK workflows. Keep the paths exact so a future
+    # runner image change cannot turn reclamation into a broad deletion.
+    Path("/opt/hostedtoolcache/CodeQL"),
+    Path("/usr/local/share/boost"),
 )
 
 
